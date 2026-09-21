@@ -1,0 +1,77 @@
+cv:
+  name: Jordan Candidate
+  headline: Software Engineer
+  email: jordan.candidate@example.com
+  phone: "+1-555-0100"
+  website: https://example.com
+  social_networks:
+    - network: LinkedIn
+      username: jordan-candidate
+    - network: GitHub
+      username: jordan-candidate
+  sections:
+    Summary:
+      - Example summary line describing your background, focus areas, and what you're looking for next.
+    Experience:
+      - company: Example Corp
+        position: Data Scientist
+        location: Remote
+        start_date: 2022-01
+        end_date: present
+        highlights:
+          - Investigated a performance issue in an example service and cut p95 latency by **30%**.
+          - Automated an example manual reporting process, saving the team **5 hours** a week.
+          - Built an example monitoring dashboard used weekly by **10** stakeholders.
+          - Mentored **2** example interns through their first project.
+          - Presented example findings at a company-wide demo day.
+      - company: Example Labs
+        position: Machine Learning Intern
+        location: Remote
+        start_date: 2021-06
+        end_date: 2021-12
+        highlights:
+          - Prototyped an example classification model on an internal dataset.
+          - Wrote example documentation adopted as the team's onboarding guide.
+      - company: Example Startup
+        position: Software Engineer
+        location: Remote
+        start_date: 2020-06
+        end_date: 2021-05
+        highlights:
+          - Shipped an example backend service handling **1k** daily requests.
+          - Fixed an example set of bugs reported by early users.
+      - company: Example University Lab
+        position: Research Assistant
+        location: Remote
+        start_date: 2019-09
+        end_date: 2020-05
+        highlights:
+          - Ran an example set of experiments summarized in a lab report.
+          - Presented example findings at a department seminar.
+      - company: Example Nonprofit
+        position: Volunteer Developer
+        location: Remote
+        start_date: 2018-06
+        end_date: 2019-08
+        highlights:
+          - Built an example website used by the organization's volunteers.
+          - Maintained an example internal tool for event sign-ups.
+    Projects:
+      - name: Example Project
+        highlights:
+          - Built an example end-to-end demo covering data ingestion through a served model.
+    Skills:
+      - label: Languages
+        details: Python, TypeScript, SQL
+      - label: ML / AI
+        details: PyTorch, scikit-learn
+      - label: Cloud
+        details: AWS, Azure
+    Distinctions:
+      - Example award or recognition, awarded 2021.
+    Education:
+      - institution: Example University
+        area: Computer Science
+        degree: BSc
+        start_date: 2016-09
+        end_date: 2020-05

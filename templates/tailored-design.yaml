@@ -1,0 +1,92 @@
+# The design block for a TAILORED CV. The only one.
+#
+# Created 2026-08-05. This file exists because three places used to disagree about
+# what a tailored CV looks like: the masters' own design block (tuned for reading
+# at length, 10pt/0.7em), the tailor-resume skill's compact spec (9pt/0.5em), and
+# config/profile.yml -> cv.design_overrides (9.5pt/0.5in margins). Nothing said
+# which won, so every application was a fresh guess. config/profile.yml is gone;
+# this file is the answer.
+#
+# HOW TO USE IT
+#   Replace the tailored copy's entire `design:` block with the contents below.
+#   Change exactly one thing: `page.size` (us-letter for US/Canada, else a4).
+#   Nothing else. generate-pdf.mjs enforces this by comparing the parsed design
+#   object against this file and refusing to render a tailored copy that differs.
+#
+# WHY THESE NUMBERS
+#   9pt body was measured against the CURRENT master: the whole thing, every
+#   bullet, rendered to 1 page at 92% fill. That leaves real headroom for
+#   selection. profile.yml's old 9.5pt was tuned against cv.md, deleted
+#   2026-08-04, so its fit was no longer evidence of anything.
+#
+#   The masters DO carry entries.highlights spacing (space_above 0.14cm,
+#   space_between_items 0.26cm). That is a reading affordance for a document
+#   nobody sends. It is deliberately absent here: the engineeringresumes theme
+#   defaults are tighter, and on a one-page submission tighter is correct.
+
+design:
+  # Locked by preference. Never switch themes for a JD, however much it asks.
+  theme: engineeringresumes
+
+  page:
+    # THE ONLY PERMITTED EDIT: us-letter for US/Canada roles, a4 for everywhere else.
+    size: a4
+    top_margin: 1.0cm
+    bottom_margin: 1.0cm
+    left_margin: 1.2cm
+    right_margin: 1.2cm
+    show_footer: false
+    # Suppresses the "Last updated <date>" line. A dated CV invites the reader to
+    # wonder how long the search has been running.
+    show_top_note: false
+
+  typography:
+    font_size:
+      body: 9pt
+      name: 24pt
+      # A distinct subtitle, subordinate to the name and readable at print size.
+      headline: 10.5pt
+      # 8.5pt keeps email + phone + website + LinkedIn + GitHub on ONE header
+      # line. At 9.5pt the header wraps and orphans the last connection.
+      connections: 8.5pt
+      section_titles: 1.2em
+    bold:
+      headline: false
+    line_spacing: 0.5em
+    # left, not justified. Justification turns on hyphenation, which was breaking
+    # words across lines ("Share-Point", "prepro-cessing"). Found 2026-07-17.
+    alignment: left
+    font_family:
+      headline: Source Sans 3
+      body: XCharter
+      name: XCharter
+      connections: XCharter
+      section_titles: XCharter
+
+  colors:
+    # Navy on the name and section titles; the subtitle uses muted charcoal. Body stays black and metrics are
+    # NEVER coloured. Dark enough to stay legible printed in black and white.
+    name: rgb(17,45,78)
+    headline: rgb(75,85,95)
+    section_titles: rgb(17,45,78)
+    links: rgb(17,45,78)
+    connections: rgb(60,60,60)
+
+  section_titles:
+    space_above: 0.3cm
+    space_below: 0.2cm
+
+  sections:
+    space_between_regular_entries: 0.35cm
+    space_between_text_based_entries: 0.15cm
+
+  header:
+    # Keep the name, role, and contacts together as a compact header.
+    space_below_name: 0.4cm
+    space_below_headline: 0.35cm
+    connections:
+      # CRITICAL. renderCV defaults this to "national", which strips the country
+      # code and renders e.g. +1 555 0100 as "555 0100" — undialable from abroad.
+      # Never omit this key.
+      phone_number_format: international
+  # entries.highlights is intentionally NOT set here. See WHY THESE NUMBERS above.

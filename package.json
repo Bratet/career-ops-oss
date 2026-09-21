@@ -1,0 +1,50 @@
+{
+  "name": "career-ops",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:general-application": "tsx scripts/test-general-application.ts",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "reconcile": "node scripts/reconcile-index.mjs",
+    "test:tracker": "node scripts/test-tracker-roundtrip.mjs",
+    "test:ops": "tsx scripts/test-ops.ts",
+    "test:tailoring": "tsx scripts/test-tailoring.ts",
+    "test:skills": "tsx scripts/test-skills.ts",
+    "test:runs": "tsx scripts/test-runs.ts",
+    "test:editor-chat": "tsx scripts/test-editor-chat.ts",
+    "test:engine-settings": "tsx scripts/test-engine-settings.ts",
+    "test:application-delete": "tsx scripts/test-application-delete.ts",
+    "test:workspaces": "tsx scripts/test-workspaces.ts",
+    "test:application-flow": "tsx scripts/test-application-flow.ts"
+  },
+  "dependencies": {
+    "@codemirror/lang-yaml": "^6.1.2",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.36.4",
+    "@uiw/react-codemirror": "^4.23.10",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.474.0",
+    "next": "^15.1.6",
+    "pdfjs-dist": "^4.10.38",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^2.15.1",
+    "tailwind-merge": "^2.6.0",
+    "yaml": "^2.7.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.10.7",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "tailwindcss": "^4.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

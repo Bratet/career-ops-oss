@@ -1,0 +1,34 @@
+# Personal files (never committed)
+config/candidate.json
+config/signature.png
+.env
+
+# Generated (renderCV intermediates)
+rendercv_output/
+
+# OS
+.DS_Store
+*.mov
+*.mp4
+
+# Claude Code local
+.claude/settings.local.json
+
+# Python
+__pycache__/
+
+# Node / Next.js (this repo now hosts a Next app)
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+.npmrc
+
+# Local app state (machine-specific, not shared)
+workspace/state/settings.json
+workspace/state/.trash/
+
+# Scratch render previews (not application output)
+/tmp/
+workspace/applications/pdf/

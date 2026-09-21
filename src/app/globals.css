@@ -1,0 +1,215 @@
+@import 'tailwindcss';
+
+/* Theme tokens are overridden below for light, dark, or the system preference. */
+@theme {
+  --color-bg: oklch(0.16 0.012 258);
+  --color-surface: oklch(0.20 0.014 258);
+  --color-surface-2: oklch(0.24 0.016 258);
+  --color-border: oklch(0.30 0.018 258);
+  --color-border-strong: oklch(0.38 0.02 258);
+
+  --color-text: oklch(0.94 0.006 258);
+  --color-muted: oklch(0.70 0.014 258);
+  --color-faint: oklch(0.56 0.014 258);
+
+  --color-accent: oklch(0.68 0.16 250);
+  --color-accent-soft: oklch(0.30 0.06 250);
+
+  --color-ok: oklch(0.72 0.15 155);
+  --color-warn: oklch(0.78 0.15 78);
+  --color-bad: oklch(0.65 0.19 22);
+  --color-ok-soft: oklch(0.30 0.06 155);
+  --color-warn-soft: oklch(0.32 0.06 78);
+  --color-bad-soft: oklch(0.30 0.08 22);
+  --color-code-string: oklch(0.92 0.008 258);
+  --color-code-key: oklch(0.75 0.13 250);
+  --color-code-literal: oklch(0.80 0.13 78);
+  --color-code-comment: oklch(0.64 0.018 258);
+  --color-code-punctuation: oklch(0.67 0.018 258);
+  --color-code-active-line: rgb(255 255 255 / 0.035);
+  --color-code-selection: rgb(57 135 229 / 0.25);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-bg: oklch(0.16 0.012 258);
+  --color-surface: oklch(0.20 0.014 258);
+  --color-surface-2: oklch(0.24 0.016 258);
+  --color-border: oklch(0.30 0.018 258);
+  --color-border-strong: oklch(0.38 0.02 258);
+  --color-text: oklch(0.94 0.006 258);
+  --color-muted: oklch(0.70 0.014 258);
+  --color-faint: oklch(0.56 0.014 258);
+  --color-accent: oklch(0.68 0.16 250);
+  --color-accent-soft: oklch(0.30 0.06 250);
+  --color-ok: oklch(0.72 0.15 155);
+  --color-warn: oklch(0.78 0.15 78);
+  --color-bad: oklch(0.65 0.19 22);
+  --color-ok-soft: oklch(0.30 0.06 155);
+  --color-warn-soft: oklch(0.32 0.06 78);
+  --color-bad-soft: oklch(0.30 0.08 22);
+  --color-code-string: oklch(0.92 0.008 258);
+  --color-code-key: oklch(0.75 0.13 250);
+  --color-code-literal: oklch(0.80 0.13 78);
+  --color-code-comment: oklch(0.64 0.018 258);
+  --color-code-punctuation: oklch(0.67 0.018 258);
+  --color-code-active-line: rgb(255 255 255 / 0.035);
+  --color-code-selection: rgb(57 135 229 / 0.25);
+  --color-viz-grid: #2c2c2a;
+  --color-viz-axis: #383835;
+  --color-viz-muted: #898781;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --color-bg: oklch(0.985 0.004 258);
+  --color-surface: oklch(1 0 0);
+  --color-surface-2: oklch(0.96 0.008 258);
+  --color-border: oklch(0.88 0.012 258);
+  --color-border-strong: oklch(0.76 0.016 258);
+  --color-text: oklch(0.24 0.016 258);
+  --color-muted: oklch(0.43 0.018 258);
+  --color-faint: oklch(0.56 0.015 258);
+  --color-accent: oklch(0.52 0.18 250);
+  --color-accent-soft: oklch(0.92 0.055 250);
+  --color-ok: oklch(0.48 0.14 155);
+  --color-warn: oklch(0.58 0.15 78);
+  --color-bad: oklch(0.54 0.18 22);
+  --color-ok-soft: oklch(0.93 0.045 155);
+  --color-warn-soft: oklch(0.95 0.05 78);
+  --color-bad-soft: oklch(0.94 0.055 22);
+  --color-code-string: oklch(0.29 0.018 258);
+  --color-code-key: oklch(0.43 0.17 250);
+  --color-code-literal: oklch(0.47 0.15 65);
+  --color-code-comment: oklch(0.49 0.025 258);
+  --color-code-punctuation: oklch(0.46 0.025 258);
+  --color-code-active-line: rgb(30 67 110 / 0.055);
+  --color-code-selection: rgb(57 135 229 / 0.2);
+  --color-viz-grid: #d7dce5;
+  --color-viz-axis: #a7afbd;
+  --color-viz-muted: #657083;
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme='system'] {
+    color-scheme: light;
+    --color-bg: oklch(0.985 0.004 258);
+    --color-surface: oklch(1 0 0);
+    --color-surface-2: oklch(0.96 0.008 258);
+    --color-border: oklch(0.88 0.012 258);
+    --color-border-strong: oklch(0.76 0.016 258);
+    --color-text: oklch(0.24 0.016 258);
+    --color-muted: oklch(0.43 0.018 258);
+    --color-faint: oklch(0.56 0.015 258);
+    --color-accent: oklch(0.52 0.18 250);
+    --color-accent-soft: oklch(0.92 0.055 250);
+    --color-ok: oklch(0.48 0.14 155);
+    --color-warn: oklch(0.58 0.15 78);
+    --color-bad: oklch(0.54 0.18 22);
+    --color-ok-soft: oklch(0.93 0.045 155);
+    --color-warn-soft: oklch(0.95 0.05 78);
+    --color-bad-soft: oklch(0.94 0.055 22);
+    --color-code-string: oklch(0.29 0.018 258);
+    --color-code-key: oklch(0.43 0.17 250);
+    --color-code-literal: oklch(0.47 0.15 65);
+    --color-code-comment: oklch(0.49 0.025 258);
+    --color-code-punctuation: oklch(0.46 0.025 258);
+    --color-code-active-line: rgb(30 67 110 / 0.055);
+    --color-code-selection: rgb(57 135 229 / 0.2);
+    --color-viz-grid: #d7dce5;
+    --color-viz-axis: #a7afbd;
+    --color-viz-muted: #657083;
+  }
+}
+
+* { border-color: var(--color-border); }
+
+html, body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 6px;
+  border: 2px solid var(--color-bg);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--color-faint); }
+
+/* Numbers in tables and stats should align across rows. */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* Arrow steps make the analysis-to-resume sequence explicit. */
+.application-flow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.application-flow-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  padding: 18px 30px;
+  text-align: left;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 50%, calc(100% - 18px) 100%, 0 100%, 18px 50%);
+}
+
+.application-flow li:first-child .application-flow-step {
+  padding-left: 18px;
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 50%, calc(100% - 18px) 100%, 0 100%);
+}
+
+.application-flow-step:hover { background: var(--color-border); }
+.application-flow-step[aria-current='step'] { background: var(--color-accent-soft); }
+.application-flow li:focus-within { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+.application-flow-step:focus-visible { outline: none; }
+.application-flow-number { font-size: 18px; font-weight: 600; color: var(--color-muted); }
+.application-flow-step[aria-current='step'] .application-flow-number { color: var(--color-accent); }
+
+@media (max-width: 639px) {
+  .application-flow { grid-template-columns: minmax(0, 1fr); }
+  .application-flow-step { padding: 14px 30px 14px 18px; }
+  .application-flow li:last-child .application-flow-step {
+    clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 50%, calc(100% - 18px) 100%, 0 100%);
+  }
+}
+
+/*
+ * Chart tokens. Validated with the dataviz palette validator against this app's
+ * own card surface (#12161c), dark mode:
+ *   ordinal ramp  node scripts/validate_palette.js "#9ec5f4,#6da7ec,#3987e5,#256abf,#184f95" \
+ *                   --mode dark --surface "#12161c" --ordinal   -> ALL CHECKS PASS
+ * Every chart here is single-series or ordinal, so no categorical palette is in
+ * play and no legend is needed: each chart's title names its one series.
+ */
+@theme {
+  --color-viz-1: #3987e5;
+  --color-viz-ord-1: #9ec5f4;
+  --color-viz-ord-2: #6da7ec;
+  --color-viz-ord-3: #3987e5;
+  --color-viz-ord-4: #256abf;
+  --color-viz-ord-5: #184f95;
+
+  --color-viz-grid: #2c2c2a;
+  --color-viz-axis: #383835;
+  --color-viz-muted: #898781;
+
+  /* Status palette, fixed. Always paired with a text label, never color alone. */
+  --color-status-good: #0ca30c;
+  --color-status-warning: #fab219;
+  --color-status-serious: #ec835a;
+  --color-status-critical: #d03b3b;
+}
