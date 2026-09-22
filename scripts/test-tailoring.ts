@@ -1,10 +1,13 @@
+import { readFile } from 'fs/promises'
+import { parse } from 'yaml'
+import { PATHS } from '../src/lib/paths'
 import { jdAnalysisParser, rankedRequirements } from '../src/lib/tailoring/jd'
-import { requirementMap, withTailoredDesign } from '../src/lib/tailoring/seed'
+import { requirementMap, withTailoredDesign, seedYaml } from '../src/lib/tailoring/seed'
 import { requirementActionsFor, tailorPrompt, type TailorAttemptFeedback } from '../src/lib/tailoring/rules'
 import { acceptedTailoringNotes } from '../src/lib/tailoring/notes'
 import type { Op } from '../src/lib/tailoring/ops'
 import { parseSkill } from '../src/lib/skills/parser'
-import { comparePageFit, isVerifiedOnePage, PAGE_FILL_TARGET, pageFitCandidateKey, pageFitSignature, pageFitState, reachedPageFitTarget } from '../src/lib/tailoring/pageFit'
+import { comparePageFit, isVerifiedOnePage, pageFitCandidateKey, pageFitSignature, pageFitState, reachedPageFitTarget } from '../src/lib/tailoring/pageFit'
 
 let failures = 0
 function check(name: string, condition: boolean, detail = '') {
@@ -97,15 +100,15 @@ const spillPrompt = tailorPrompt('cv:\n  name: Example', ranked, skill.instructi
   feedback[0],
   { ...feedback[0], attempt: 2, pages: 2, fill: 98, selected: false },
 ])
-check('spill after underfill asks for a smaller restoration', spillPrompt.includes('restore a smaller, high-value item'))
+check('verified page is not refilled', spillPrompt.includes('Do not add content merely to increase fill'))
 
-const full = { pages: 1, fill: PAGE_FILL_TARGET, failures: [] }
-const thin = { pages: 1, fill: PAGE_FILL_TARGET - 3, failures: [] }
+const full = { pages: 1, fill: 95, failures: [] }
+const thin = { pages: 1, fill: 65, failures: [] }
 const overflow = { pages: 2, fill: 98, failures: [{ kind: 'page-count' }] }
 const invalid = { pages: 1, fill: 99, failures: [{ kind: 'em-dash' }] }
-check('page fit target is 95%', PAGE_FILL_TARGET === 95)
+check('fill does not rank valid pages', comparePageFit(full, thin) === 0)
 check('target candidate stops the loop', reachedPageFitTarget(full) && pageFitState(full) === 'target')
-check('thin one-page candidate stays eligible', isVerifiedOnePage(thin) && pageFitState(thin) === 'underfilled')
+check('thin one-page candidate stays eligible', isVerifiedOnePage(thin) && pageFitState(thin) === 'target' && reachedPageFitTarget(thin))
 check('one page beats a fuller overflow', comparePageFit(thin, overflow) > 0)
 check('guard failure cannot beat valid one page', comparePageFit(invalid, thin) < 0)
 check('renderer outcomes have stable signatures', pageFitSignature(thin) === pageFitSignature({ ...thin }))
@@ -151,5 +154,17 @@ check('accepted proposal fills requirement evidence', accepted.includes('evidenc
 check('accepted proposal records kept cuts', accepted.includes('Older project'))
 check('accepted proposal records rendered result', accepted.includes('1 page, 94% fill, headline used: "Production ML Engineer"'))
 
+
+for (const language of ['en', 'fr'] as const) {
+  const source = parse(await readFile(PATHS.ownCv[language], 'utf-8'))
+  const seeded = parse(await seedYaml({ ...ranked, language, paperSize: 'us-letter' }))
+  check(`${language} baseline preserves general content and section order`, JSON.stringify(seeded.cv) === JSON.stringify(source.cv))
+  check(`${language} baseline preserves locale`, JSON.stringify(seeded.locale) === JSON.stringify(source.locale))
+  check(`${language} baseline honors JD paper size`, seeded.design.page.size === 'us-letter')
+}
+const dualPrompt = tailorPrompt('GENERAL_BASE', ranked, skill.instructions, [], 'MASTER_EVIDENCE', 'CANDIDATE_PREFERENCE')
+check('both baseline and master are supplied before selection', dualPrompt.includes('GENERAL_BASE') && dualPrompt.includes('MASTER_EVIDENCE'))
+check('candidate preferences reach tailoring', dualPrompt.includes('CANDIDATE_PREFERENCE'))
+check('page count verified without fill measurement', isVerifiedOnePage({ pages: 1, fill: null, failures: [] }))
 console.log(failures ? `\n${failures} failure(s)` : '\nall tailoring checks pass')
 process.exit(failures ? 1 : 0)

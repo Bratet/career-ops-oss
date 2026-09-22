@@ -6,7 +6,7 @@ import { APP_FILES, PATHS } from '@/lib/paths'
 import { applyNotesPatch, cutsFromOps } from '@/lib/tailoring/notes'
 import { applyOps, type Op } from '@/lib/tailoring/ops'
 import { jdAnalysisParser } from '@/lib/tailoring/jd'
-import { postingVocabulary } from '@/lib/tailoring/rules'
+import { parse } from 'yaml'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -31,7 +31,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ key: st
   }
 
   try {
-    const result = applyOps(yaml, ops, { posting: await postingFor(key) })
+    const result = applyOps(yaml, ops, { master: await masterFor(key, yaml) })
     // Turning a change off in the editor sends the whole surviving set, so the
     // cut table can be rebuilt from it and never describes a cut that was undone.
     if (syncNotes) await syncCutTable(key, result.applied)
@@ -41,17 +41,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ key: st
   }
 }
 
-/** Replays use the same JD vocabulary allowance as the original pass. */
-async function postingFor(key: string): Promise<string> {
+/** Resolve server-owned evidence for checklist replay; stale imports fail by fingerprint. */
+async function masterFor(key: string, yaml: string): Promise<string> {
   const app = await getApplication(key)
-  if (!app?.folder) return ''
-  try {
-    const raw = await readFile(join(PATHS.applications, app.folder.folder, APP_FILES.analysis), 'utf-8')
-    const parsed = jdAnalysisParser.safeParse(JSON.parse(raw))
-    return parsed.success ? postingVocabulary(parsed.data) : ''
-  } catch {
-    return ''
+  let language = parse(yaml)?.locale?.language === 'french' ? 'fr' : 'en'
+  if (app?.folder) {
+    try {
+      const raw = await readFile(join(PATHS.applications, app.folder.folder, APP_FILES.analysis), 'utf-8')
+      const analysis = jdAnalysisParser.parse(JSON.parse(raw))
+      language = analysis.language
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
   }
+  return readFile(PATHS.masters[language === 'fr' ? 'fr' : 'en'], 'utf-8')
 }
 
 /** Rewrite the notes' cut table from the operations that are still live. */

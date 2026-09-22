@@ -45,6 +45,7 @@ export function EditorPane({
   applicationKey,
   chatScope,
   general = false,
+  review,
 }: {
   initialYaml: string
   mode: 'master' | 'tailored'
@@ -57,6 +58,7 @@ export function EditorPane({
   /** Keeps chat history isolated to this exact resume document. */
   chatScope: string
   general?: boolean
+  review?: (api: EditorApi) => ReactNode
 }) {
   const [text, setText] = useState(initialYaml)
   const [state, setState] = useState<RenderState | null>(null)
@@ -202,6 +204,7 @@ export function EditorPane({
         </div>
       </div>
 
+      {review?.(api)}
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-2">
         <Card className="flex min-h-0 flex-col overflow-hidden">
           <div className="flex shrink-0 items-center gap-1 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5" role="tablist" aria-label="CV editing mode">

@@ -20,8 +20,8 @@ cv:
         end_date: present
         highlights:
           - Investigated a performance issue in an example service and cut p95 latency by **30%**.
-          - Automated an example manual reporting process, saving the team **5 hours** a week.
           - Built an example monitoring dashboard used weekly by **10** stakeholders.
+          - Automated an example manual reporting process, saving the team **5 hours** a week.
           - Mentored **2** example interns through their first project.
           - Presented example findings at a company-wide demo day.
       - company: Example Labs

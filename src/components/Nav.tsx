@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 const LINKS = [
   { href: '/', label: 'Dashboard' },
   { href: '/applications', label: 'Applications' },
+  { href: '/plan', label: 'Apply plan' },
   { href: '/profile', label: 'Profile' },
   { href: '/skills', label: 'Skills' },
   { href: '/runs', label: 'Runs' },
@@ -20,12 +21,12 @@ export function Nav() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-bg)]/85 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-6 px-6">
+      <div className="mx-auto flex min-h-14 max-w-[1600px] flex-wrap items-center gap-x-6 gap-y-2 px-6 py-2">
         <Link href="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
           <span className="grid size-6 place-items-center rounded-md bg-[var(--color-accent)] text-[11px] font-bold text-[var(--color-bg)]">co</span>
           career-ops
         </Link>
-        <nav className="flex items-center gap-1">
+        <nav className="order-last flex w-full items-center gap-1 overflow-x-auto sm:order-none sm:w-auto">
           {LINKS.map((link) => {
             const active = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href)
             return (
@@ -33,7 +34,7 @@ export function Nav() {
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  'rounded-md px-2.5 py-1.5 text-[13px] transition-colors',
+                  'shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[13px] transition-colors',
                   active
                     ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
                     : 'text-[var(--color-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]',

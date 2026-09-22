@@ -22,6 +22,7 @@ export const PATHS = {
   tracker: join(STATE, 'applications.md'),
   appIndex: join(STATE, 'app-index.json'),
   settings: join(STATE, 'settings.json'),
+  savedSearches: join(STATE, 'saved-searches.json'),
   candidateEligibility: join(STATE, 'candidate-eligibility.json'),
   candidateGuidance: join(STATE, 'candidate-guidance.md'),
   skills: join(STATE, 'skills'),

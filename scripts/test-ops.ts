@@ -42,7 +42,7 @@ const ops: Op[] = [
   { op: 'drop', path: 'cv.sections.Experience[4]', why: 'no must-evidence' },
   { op: 'drop', path: `cv.sections.Experience[0].highlights[${firstDrop}]`, why: 'weakest bullet' },
   { op: 'drop', path: `cv.sections.Experience[0].highlights[${secondDrop}]`, why: 'weakest bullet' },
-  { op: 'reword', path: 'cv.sections.Experience[0].highlights[1]', from: bullet, to: bullet.replace('Automated', 'Delivered'), why: 'JD verb' },
+  { op: 'reword', path: 'cv.sections.Experience[0].highlights[1]', from: bullet, to: bullet.replace('Built', 'Delivered'), why: 'JD verb' },
   { op: 'reorder', path: 'cv.sections.Skills', order: skillOrder, why: 'JD leads on machine learning' },
   { op: 'set', path: 'cv.headline', value: 'Data Scientist with Machine Learning Engineering experience', why: 'bridge the title' },
   { op: 'drop', path: 'cv.sections.Distinctions', why: 'no weight for this JD' },
@@ -113,6 +113,42 @@ const all3 = applyOps(master, three)
 const subset = applyOps(master, [all3.applied[0], all3.applied[2]])
 check('unchecking one row replays the rest', subset.applied.length === 2, JSON.stringify(subset.rejected))
 check('the unchecked bullet came back', (parse(subset.yaml).cv.sections.Experience[0].highlights as string[]).length === (parse(master).cv.sections.Experience[0].highlights as string[]).length - 1)
+
+
+// Imports are server-resolved evidence, never free-form model objects.
+const role = { company: 'Example', position: 'Engineer', start_date: '2024-01' }
+const general = stringify({ cv: { sections: { Summary: ['Engineer'], Experience: [
+  { ...role, highlights: ['Built a general tool', 'Keep me'] },
+  { company: 'Other', position: 'Intern', highlights: ['Other work'] },
+], Skills: [{ label: 'ML', details: 'Python' }] } }, design: { theme: 'engineeringresumes' } })
+const evidence = stringify({ cv: { sections: { Experience: [{ ...role, highlights: ['Built a PyTorch model at 92% accuracy'] }],
+  Projects: [{ name: 'Research project', highlights: ['Published a model'] }],
+  Skills: [{ label: 'ML', details: 'Python, PyTorch' }],
+} } })
+const importOp: Op = { op: 'import', path: 'cv.sections.Experience[0].highlights', sourcePath: 'cv.sections.Experience[0].highlights[0]', index: 1, why: 'vision requirement' }
+const imported = applyOps(general, [importOp], { master: evidence })
+check('master project added at original insertion index', parse(imported.yaml).cv.sections.Experience[0].highlights.join('|') === 'Built a general tool|Built a PyTorch model at 92% accuracy|Keep me')
+check('source and design preserved during import', parse(imported.yaml).design.theme === 'engineeringresumes' && parse(general).cv.sections.Experience[0].highlights.length === 2)
+check('import replays deterministically', applyOps(general, imported.applied, { master: evidence }).yaml === imported.yaml)
+check('stale source rejected on replay', applyOps(general, imported.applied, { master: evidence.replace('92%', '93%') }).rejected.length === 1)
+check('missing evidence rejected', applyOps(general, [importOp]).rejected.length === 1)
+check('cross-role attribution rejected', applyOps(general, [{ ...importOp, path: 'cv.sections.Experience[1].highlights' }], { master: evidence }).rejected.length === 1)
+check('new import metrics rejected', applyOps(general, [{ ...importOp, to: 'Built a PyTorch model at 99% accuracy' }], { master: evidence }).rejected.length === 1)
+check('new import technology rejected even if in JD', applyOps(general, [{ ...importOp, to: 'Built a TensorRT model at 92% accuracy' }], { master: evidence, posting: 'TensorRT' }).rejected.length === 1)
+const replaced = applyOps(general, [{ ...importOp, path: 'cv.sections.Experience[0].highlights[0]', index: null }], { master: evidence })
+check('stronger evidence replaces a general bullet', parse(replaced.yaml).cv.sections.Experience[0].highlights.length === 2 && parse(replaced.yaml).cv.sections.Experience[0].highlights[0].includes('92%'))
+const addedSection = applyOps(general, [{ op: 'import', path: 'cv.sections.Projects', sourcePath: 'cv.sections.Projects', why: 'research evidence' }], { master: evidence })
+check('missing section imported from master', parse(addedSection.yaml).cv.sections.Projects[0].name === 'Research project')
+const selectedProject = applyOps(general, [{ op: 'import', path: 'cv.sections.Projects', sourcePath: 'cv.sections.Projects[0]', why: 'only relevant project' }], { master: evidence })
+check('a selected entry creates its missing section without copying the inventory', parse(selectedProject.yaml).cv.sections.Projects.length === 1 && selectedProject.rejected.length === 0)
+const enriched = applyOps(general, [{ op: 'import', path: 'cv.sections.Skills[0].details', sourcePath: 'cv.sections.Skills[0].details', to: 'Python, PyTorch', why: 'supported stack' }], { master: evidence })
+check('skills enriched from source evidence', parse(enriched.yaml).cv.sections.Skills[0].details === 'Python, PyTorch')
+const reorderedSections = applyOps(general, [{ op: 'reorder', path: 'cv.sections', order: [0, 2, 1], why: 'skills earlier' }])
+check('section reordering supported', Object.keys(parse(reorderedSections.yaml).cv.sections).join(',') === 'Summary,Skills,Experience')
+const replay = applyOps(general, [importOp, { op: 'drop', path: 'cv.sections.Experience[0].highlights[0]', why: 'replace weak evidence' }], { master: evidence })
+check('insertion and removal keep stable indices', parse(replay.yaml).cv.sections.Experience[0].highlights.join('|') === 'Built a PyTorch model at 92% accuracy|Keep me')
+check('unchecking import restores baseline without hidden additions', applyOps(general, replay.applied.filter(op => op.op !== 'import'), { master: evidence }).yaml === applyOps(general, [{ op: 'drop', path: 'cv.sections.Experience[0].highlights[0]', why: 'replace weak evidence' }]).yaml)
+check('dropping import parent rejected', applyOps(general, [importOp, { op: 'drop', path: 'cv.sections.Experience[0]', why: 'conflict' }], { master: evidence }).rejected.length === 1)
 
 console.log(failures ? `\n${failures} failure(s)` : '\nall applier checks pass')
 process.exit(failures ? 1 : 0)

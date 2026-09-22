@@ -42,6 +42,8 @@ check: node_modules ## Typecheck
 	@npx tsc --noEmit && echo "types ok"
 
 test: node_modules ## Tracker and tailoring tests
+	@npm run test:saved-searches
+	@npm run test:resume-review
 	@npm run test:general-application
 	@npm run test:tracker
 	@npm run test:ops

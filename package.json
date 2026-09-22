@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:saved-searches": "tsx scripts/test-saved-searches.ts",
+    "test:resume-review": "tsx scripts/test-resume-review.ts",
     "test:general-application": "tsx scripts/test-general-application.ts",
     "dev": "next dev",
     "build": "next build",

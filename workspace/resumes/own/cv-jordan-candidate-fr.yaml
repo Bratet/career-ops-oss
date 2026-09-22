@@ -1,0 +1,115 @@
+cv:
+  name: Jordan Candidate
+  headline: Ingénieur logiciel
+  email: jordan.candidate@example.com
+  phone: "+1-555-0100"
+  website: https://example.com
+  social_networks:
+    - network: LinkedIn
+      username: jordan-candidate
+    - network: GitHub
+      username: jordan-candidate
+  sections:
+    Résumé:
+      - Exemple de résumé décrivant votre parcours, vos domaines de spécialité et ce que vous recherchez.
+    Expérience:
+      - company: Example Corp
+        position: Data Scientist
+        location: Télétravail
+        start_date: 2022-01
+        end_date: present
+        highlights:
+          - Analysé un problème de performance sur un service exemple et réduit la latence p95 de **30%**.
+          - Développé un tableau de bord de suivi exemple utilisé chaque semaine par **10** parties prenantes.
+      - company: Example Startup
+        position: Ingénieur logiciel
+        location: Télétravail
+        start_date: 2020-06
+        end_date: 2021-05
+        highlights:
+          - Livré un service backend exemple traitant **1k** requêtes par jour.
+    Compétences:
+      - label: Langages
+        details: Python, TypeScript, SQL
+      - label: Cloud
+        details: AWS, Azure
+    Formation:
+      - institution: Example University
+        area: Informatique
+        degree: Licence
+        start_date: 2016-09
+        end_date: 2020-05
+design:
+  theme: engineeringresumes
+  page:
+    size: a4
+    top_margin: 1.0cm
+    bottom_margin: 1.0cm
+    left_margin: 1.2cm
+    right_margin: 1.2cm
+    show_footer: false
+    show_top_note: false
+  typography:
+    font_size:
+      body: 9pt
+      name: 24pt
+      headline: 10.5pt
+      connections: 8.5pt
+      section_titles: 1.2em
+    bold:
+      headline: false
+    line_spacing: 0.5em
+    alignment: left
+    font_family:
+      headline: Source Sans 3
+      body: XCharter
+      name: XCharter
+      connections: XCharter
+      section_titles: XCharter
+  colors:
+    name: rgb(17,45,78)
+    headline: rgb(75,85,95)
+    section_titles: rgb(17,45,78)
+    links: rgb(17,45,78)
+    connections: rgb(60,60,60)
+  section_titles:
+    space_above: 0.3cm
+    space_below: 0.2cm
+  sections:
+    space_between_regular_entries: 0.35cm
+    space_between_text_based_entries: 0.15cm
+  header:
+    space_below_name: 0.4cm
+    space_below_headline: 0.35cm
+    connections:
+      phone_number_format: international
+locale:
+  language: french
+  present: présent
+  last_updated: Mis à jour en
+  month_abbreviations:
+  - janv.
+  - févr.
+  - mars
+  - avr.
+  - mai
+  - juin
+  - juil.
+  - août
+  - sept.
+  - oct.
+  - nov.
+  - déc.
+  month_names:
+  - janvier
+  - février
+  - mars
+  - avril
+  - mai
+  - juin
+  - juillet
+  - août
+  - septembre
+  - octobre
+  - novembre
+  - décembre

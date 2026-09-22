@@ -6,7 +6,7 @@ import { rankedRequirements, type JdAnalysis } from './jd'
 /**
  * Build the starting YAML for a new application.
  *
- * This is a faithful copy of the language-matched master with the tailored
+ * This is a faithful copy of the language-matched general resume with the tailored
  * design block stamped in. It deliberately does NOT cut anything: selection is
  * the next piece of work, and a seed that silently dropped content would be
  * worse than one that starts complete and overflows.
@@ -14,17 +14,17 @@ import { rankedRequirements, type JdAnalysis } from './jd'
 
 export async function seedYaml(analysis: JdAnalysis): Promise<string> {
   const lang: Lang = analysis.language === 'fr' ? 'fr' : 'en'
-  const master = parse(await readFile(PATHS.masters[lang], 'utf-8')) as Record<string, unknown>
+  const general = parse(await readFile(PATHS.ownCv[lang], 'utf-8')) as Record<string, unknown>
   const design = parse(await readFile(PATHS.tailoredDesign, 'utf-8')) as { design: Record<string, unknown> }
 
   const page = { ...(design.design.page as Record<string, unknown>), size: analysis.paperSize }
 
   const doc: Record<string, unknown> = {
-    cv: master.cv,
+    cv: general.cv,
     design: { ...design.design, page },
   }
-  // The FR master carries a locale block; the tailored copy needs it too.
-  if (master.locale) doc.locale = master.locale
+  // The FR general resume carries a locale block; the tailored copy needs it too.
+  if (general.locale) doc.locale = general.locale
 
   return stringify(doc, { lineWidth: 0, defaultStringType: 'QUOTE_SINGLE', defaultKeyType: 'PLAIN' })
 }
@@ -75,7 +75,7 @@ export function requirementMap(analysis: JdAnalysis): string {
     '',
     analysis.keywords.join(', ') || '_none extracted_',
     '',
-    '## Cut from the master',
+    '## Cut from the general resume',
     '',
     '| What | Why |',
     '|---|---|',

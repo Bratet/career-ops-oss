@@ -10,7 +10,7 @@ import { normalize } from '../yamlPath'
  * code rather than asked for in a prompt.
  */
 
-export type OpKind = 'drop' | 'reword' | 'reorder' | 'set'
+export type OpKind = 'drop' | 'reword' | 'reorder' | 'set' | 'import'
 
 export interface Op {
   op: OpKind
@@ -25,6 +25,11 @@ export interface Op {
   value?: string | null
   /** reorder: a permutation of the target sequence's indices. */
   order?: number[] | null
+  /** Import: path and fingerprint in the server-owned master. */
+  sourcePath?: string | null
+  sourceExpect?: string | null
+  /** Insert before this original sequence index; null appends. */
+  index?: number | null
   /**
    * What the applier saw at this path when the op first ran. Filled in on the way
    * out, checked on the way back in.
@@ -139,7 +144,7 @@ function looksTechnical(raw: string): boolean {
 
 /**
  * A reword may fold in the posting's vocabulary. It may not name a technology
- * that appears neither in the CV nor in the posting, because that is a claim
+ * that appears nowhere in the source evidence, because that is a claim
  * nobody made — which is how "TensorRT" would otherwise reach a Skills bucket.
  */
 function noInventedTech(from: string, to: string, corpus: string): string | null {
@@ -153,7 +158,7 @@ function noInventedTech(from: string, to: string, corpus: string): string | null
       return w && !known.has(w)
     })
   if (!invented.length) return null
-  return `names something that appears in neither the CV nor the posting: ${invented.slice(0, 4).join(', ')}`
+  return `names something absent from the resume evidence: ${invented.slice(0, 4).join(', ')}`
 }
 
 /**
@@ -178,16 +183,18 @@ function noNewNumbers(from: string, to: string): string | null {
 export function applyOps(
   text: string,
   ops: Op[],
-  opts: { posting?: string } = {},
+  opts: { posting?: string; master?: string } = {},
 ): ApplyResult {
   const doc = parseDocument(text)
   if (doc.errors.length) throw new Error(doc.errors[0].message)
 
+  const master = opts.master ? parseDocument(opts.master) : null
+  if (master?.errors.length) throw new Error(master.errors[0].message)
   const rejected: Rejection[] = []
   const applied: Op[] = []
 
   // Phase 1: validate and resolve everything against the pre-edit document.
-  interface Staged { op: Op; target: Resolved | null; parentOfNew?: Resolved | null; key?: string }
+  interface Staged { op: Op; target: Resolved | null; parentOfNew?: Resolved | null; key?: string; imported?: unknown; anchor?: unknown }
   const staged: Staged[] = []
 
   for (const op of ops) {
@@ -198,10 +205,10 @@ export function applyOps(
       continue
     }
 
-    // `set` is the one op allowed to create a key that does not exist yet (cv.headline).
+    // Only headline set and source-backed section imports may create a key.
     let target = resolve(doc, segments)
     let parentOfNew: Resolved | null = null
-    if (!target && op.op === 'set' && segments.length > 1) {
+    if (!target && (op.op === 'set' || op.op === 'import') && segments.length > 1) {
       parentOfNew = resolve(doc, segments.slice(0, -1))
       if (!parentOfNew || !isMap(parentOfNew.node)) {
         rejected.push({ op, why: 'path does not exist in the document' })
@@ -209,6 +216,70 @@ export function applyOps(
       }
     } else if (!target) {
       rejected.push({ op, why: 'path does not exist in the document' })
+      continue
+    }
+
+    if (op.op === 'import') {
+      const sourceSegments = normalize(op.sourcePath ?? '')
+      const source = master && resolve(master, sourceSegments)
+      const fail = (why: string) => rejected.push({ op, why })
+      if (!source || sourceSegments[0] !== 'cv' || sourceSegments[1] !== 'sections' || segments[1] !== 'sections') {
+        fail('import requires a source inside master cv.sections and a destination inside cv.sections'); continue
+      }
+      if (op.sourceExpect != null && signature(source.node) !== op.sourceExpect) {
+        fail('master evidence changed since this import was proposed'); continue
+      }
+      if (op.expect != null && (!target || signature(target.node) !== op.expect)) {
+        fail('import destination changed since this import was proposed'); continue
+      }
+      const sourceText = textOf(source.node)
+      const sourceEntry = resolve(master!, sourceSegments.slice(0, 4))?.node
+      const destinationEntry = resolve(doc, segments.slice(0, 4))?.node
+      // A project must remain attached to the same employment entry.
+      if (sourceSegments.includes('highlights')) {
+        const sourceOwner = isMap(sourceEntry) ? sourceEntry.toJSON() : null
+        const destinationOwner = isMap(destinationEntry) ? destinationEntry.toJSON() : null
+        const identity = (entry: Record<string, unknown> | null) => JSON.stringify(entry &&
+          ['company', 'position', 'name', 'start_date', 'end_date'].map(key => entry[key] ?? null))
+        if (!segments.includes('highlights') || !sourceOwner || !destinationOwner || identity(sourceOwner) !== identity(destinationOwner)) {
+          fail('project imports must stay under the same role or project entry'); continue
+        }
+      }
+      const section = segments.length === 3 && !target && isSeq(source.node) && sourceSegments.length === 3 && segments[2] === sourceSegments[2]
+      const newEntrySection = segments.length === 3 && !target && sourceSegments.length === 4 &&
+        isSeq(source.parent) && segments[2] === sourceSegments[2] && (isMap(source.node) || sourceText !== null)
+      const append = target && isSeq(target.node) && isSeq(source.parent) &&
+        (sourceText !== null || isMap(source.node)) &&
+        segments.at(-1) === sourceSegments.at(-2)
+      const replacement = target && sourceText !== null && textOf(target.node) !== null &&
+        ((segments.at(-2) === 'highlights' && sourceSegments.at(-2) === 'highlights') ||
+          (segments.at(-1) === 'details' && sourceSegments.at(-1) === 'details'))
+      if (!section && !newEntrySection && !append && !replacement) {
+        fail('import supports a missing source section, an entry/highlight into its matching sequence, or replacement of a highlight'); continue
+      }
+      if (ops.some(other => other !== op &&
+        ((other.op === 'drop' && (op.path === other.path || op.path.startsWith(other.path + '.') || op.path.startsWith(other.path + '['))) ||
+         (!append && other.path === op.path)))) {
+        fail('import conflicts with another edit or removal of its destination'); continue
+      }
+      if (op.index != null && (!append || !Number.isInteger(op.index) || op.index < 0 || op.index > (target!.node as { items: unknown[] }).items.length)) {
+        fail('import index must refer to the original destination sequence'); continue
+      }
+      let imported = sourceText ?? (source.node as { toJSON(): unknown }).toJSON()
+      if (op.to != null) {
+        if (sourceText === null) { fail('only text evidence can be reworded during import'); continue }
+        const supported = replacement ? `${sourceText} ${textOf(target!.node) ?? ''}` : sourceText
+        const error = noNewNumbers(supported, op.to) || noInventedTech(supported, op.to, supported)
+        if (error) { fail(error); continue }
+        imported = op.to
+      }
+      if (newEntrySection) imported = [imported]
+      if (staged.some(item => item.op.op === 'import' && item.op.path === op.path && (item.op.sourcePath === op.sourcePath || !append))) {
+        fail('duplicate or conflicting import'); continue
+      }
+      staged.push({ op: { ...op, sourceExpect: signature(source.node), expect: target ? signature(target.node) : null },
+        target, parentOfNew, key: segments.at(-1), imported,
+        anchor: append && op.index != null ? (target!.node as { items: unknown[] }).items[op.index] : undefined })
       continue
     }
 
@@ -242,7 +313,7 @@ export function applyOps(
         rejected.push({ op, why: figures })
         continue
       }
-      const named = noInventedTech(current, op.to, `${text} ${opts.posting ?? ''}`)
+      const named = noInventedTech(current, op.to, text)
       if (named) {
         rejected.push({ op, why: named })
         continue
@@ -250,8 +321,8 @@ export function applyOps(
     }
 
     if (op.op === 'reorder') {
-      if (!target || !isSeq(target.node)) {
-        rejected.push({ op, why: 'reorder needs a sequence' })
+      if (!target || !(isSeq(target.node) || (op.path === 'cv.sections' && isMap(target.node)))) {
+        rejected.push({ op, why: 'reorder needs a sequence or cv.sections' })
         continue
       }
       const n = target.node.items.length
@@ -277,7 +348,7 @@ export function applyOps(
         rejected.push({ op, why: figures })
         continue
       }
-      const named = noInventedTech('', op.value, `${text} ${opts.posting ?? ''}`)
+      const named = noInventedTech('', op.value, text)
       if (named) {
         rejected.push({ op, why: named })
         continue
@@ -319,9 +390,23 @@ export function applyOps(
   }
 
   for (const { op, target } of staged) {
-    if (op.op !== 'reorder' || !target || !isSeq(target.node)) continue
+    if (op.op !== 'reorder' || !target || !(isSeq(target.node) || isMap(target.node))) continue
     const items = target.node.items
-    target.node.items = (op.order ?? []).map((i) => items[i])
+    target.node.items = (op.order ?? []).map((i) => items[i]) as typeof target.node.items
+    applied.push(op)
+  }
+
+  for (const { op, target, parentOfNew, key, imported, anchor } of staged) {
+    if (op.op !== 'import') continue
+    if (target && isSeq(target.node)) {
+      const index = anchor === undefined ? target.node.items.length : target.node.items.indexOf(anchor as never)
+      target.node.items.splice(index, 0, doc.createNode(imported))
+    } else if (target && isScalar(target.node)) {
+      target.node.value = imported
+      target.node.type = undefined
+    } else if (parentOfNew && isMap(parentOfNew.node)) {
+      parentOfNew.node.set(key, doc.createNode(imported))
+    }
     applied.push(op)
   }
 

@@ -34,12 +34,16 @@ export function acceptedTailoringNotes(
     // The accepting route validates YAML and reports the useful error there.
   }
 
-  return applyNotesPatch(md, {
+  const updated = applyNotesPatch(md, {
     requirementActions: result.requirementActions,
     cuts: cutsFromOps(result.ops),
     gaps: gapsFrom(result.requirementActions),
     result: resultLine(render.pages, render.fill, headline),
   })
+  const changes = result.ops.map(op => `| ${CELL(op.op)} | ${CELL(op.path)} | ${CELL(op.sourcePath ?? '')} | ${CELL(op.why)} |`)
+  return replaceSection(updated, 'Changes', changes.length
+    ? ['| Action | Destination | Master source | Reason |', '|---|---|---|---|', ...changes].join('\n')
+    : '_General resume retained without changes._')
 }
 
 const CELL = (s: string) => s.replace(/\|/g, '\\|').replace(/\n+/g, ' ').trim()
@@ -60,7 +64,10 @@ const norm = (s: string) =>
 export function applyNotesPatch(md: string, patch: NotesPatch): string {
   let out = md
   if (patch.requirementActions?.length) out = fillRequirementMap(out, patch.requirementActions)
-  if (patch.cuts) out = replaceSection(out, 'Cut from the master', cutsTable(patch.cuts))
+  if (patch.cuts) {
+    out = out.replace('## Cut from the master', '## Cut from the general resume')
+    out = replaceSection(out, 'Cut from the general resume', cutsTable(patch.cuts))
+  }
   if (patch.gaps) out = replaceSection(out, 'Gaps', gapsList(patch.gaps))
   if (patch.result) out = replaceSection(out, 'Result', patch.result)
   return out

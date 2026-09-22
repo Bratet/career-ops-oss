@@ -1,9 +1,9 @@
 ---
 id: tailor-cv
 name: Tailor CV
-description: Select, order, and minimally reword master-resume evidence for one job posting.
+description: Tailor the general resume to a job using the full master as evidence for additions and replacements.
 runner: cv-operations
-version: 4
+version: 6
 scope: application
 capabilities:
   - read-job-analysis
@@ -13,10 +13,13 @@ capabilities:
 
 # Instructions
 
-You are selecting a CV from a master resume for one specific job posting.
-
-Work only with content already present in the CV below. Do not bring in facts from outside it.
-Your job is to select, order, and minimally reword existing evidence so the fit is obvious.
+You are tailoring the general resume below for one job posting. The runtime also supplies the
+language-matched master and candidate preferences. The general resume is the editorial baseline;
+the master is the complete factual evidence source. Consult BOTH before proposing any changes.
+Preserve good existing wording and structure, but replace weaker projects when the master has
+stronger evidence for this role. Do not treat the master as merely an optional source of filler.
+Facts absent from both sources must not be invented; flag conflicting source claims rather than
+silently choosing the stronger one. Keep unchanged content without generating no-op edits.
 
 ## My custom rules
 
@@ -43,7 +46,8 @@ Your job is to select, order, and minimally reword existing evidence so the fit 
 
 ## Evidence plan
 
-1. Work through requirements in the ranked order shown below: every must before every nice,
+1. Plan what to keep, reword, reorder, replace, add, and remove, with reasons tied to the JD.
+   Represent only actual changes as operations. Then work through requirements in the ranked order shown below: every must before every nice,
    and lower rank numbers first within each group.
 2. For every requirement, find the strongest direct evidence in the master and classify it:
    - `lead`: decisive evidence for a top-ranked must; it belongs in the summary or first bullets.
@@ -54,7 +58,7 @@ Your job is to select, order, and minimally reword existing evidence so the fit 
    remaining musts, then the highest-ranked nice requirements. Prefer one strong item that proves
    several related requirements over repetitive items.
 4. Keep the employment timeline understandable, but remove entries, projects, bullets, and whole
-   sections that add less evidence than the space they consume.
+   sections that add less evidence than the space they consume, respecting explicit user choices.
 
 ## Top-third strategy
 
@@ -62,7 +66,8 @@ Your job is to select, order, and minimally reword existing evidence so the fit 
   headline that bridges the candidate's actual title and demonstrated target-role experience.
 - Retain an existing concise summary and explicitly chosen sections unless the user requests
   their removal. Shorten the summary before dropping it merely to save space. Respect the
-  supplied section order; this runner cannot reorder section keys or create a missing summary.
+  supplied section order by default. A missing summary may be imported from the master.
+  Reorder cv.sections only when useful for the role or explicitly requested.
 - Respect an explicitly chosen summary; do not force every posting keyword into it.
   Use the first achievement bullets to demonstrate requirements the summary does not mention.
 - Put the most relevant achievement bullets first in each retained entry.
@@ -84,26 +89,17 @@ Your job is to select, order, and minimally reword existing evidence so the fit 
 
 ## Page budget
 
-Cut low-priority evidence before compressing strong evidence into vague language. If there is spare
-room, restore the strongest omitted proof for the next unmet ranked requirement instead of adding
-filler. The renderer will measure the result and may provide repair feedback below.
+Select for relevance and strength of evidence before rendering. One page is a hard limit;
+page-fill percentage is diagnostic, not a quality score or an objective. Do not add tools,
+distinctions, or weak projects just to fill space. If relevant evidence is missing, replace
+lower-value content, not necessarily append. Do not change the locked design.
 
-One page is the ceiling, not the target. Aim for at least 95% first-page fill while preserving
-readability. Two or three measured revisions are normal. Never reach the target by changing the
-design, shrinking type, tightening spacing, or cramming several achievements into one bullet.
-
-When the previous plan is underfilled, preserve it and add evidence back in this order:
-
-1. Experience achievements, then earlier experience entries.
-2. Education evidence relevant to the posting.
-3. Adjacent, already-proven items inside the existing Skills buckets.
-4. Research or Projects when they add relevant evidence. Restore Distinctions only when
-   relevant and not explicitly excluded; never undo an explicit user omission to fill space.
-
-When a restoration spills onto page two, return to the best one-page plan and try a smaller
-high-value item. When a plan overflows from the start, remove the lowest-value whole section,
-entry, or bullet before shortening strong evidence. Renderer feedback includes the prior operation
-plans; every response must still be one complete replacement plan against the original CV.
+Repair feedback reports the actual PDF page count and rejected operations. Fix rejected edits
+and cut lower-value evidence if the result overflows. Return a complete replacement plan against
+the original general resume, not a patch against the previous attempt. The master snapshot is
+also unchanged across attempts. Empty operations are valid when the baseline already fits the
+role; still supply the complete requirement assessment. Visual layout remains unverified unless
+images were actually inspected.
 
 ## Language
 
@@ -122,13 +118,25 @@ count alone. Report any checks the runner could not perform.
 ## Operations contract
 
 Return operations, never a rewritten document. Paths use the dotted convention
-`cv.sections.Experience[0].highlights[2]` and must start with `cv.`. Every path must exist in the
-document shown below; indices refer to that original document, before any operations are applied.
+`cv.sections.Experience[0].highlights[2]` and must start with `cv.`. Destination paths and indices refer to the original GENERAL resume before edits. Source paths
+refer to the MASTER. Only import of a missing section and set of cv.headline may create paths.
 
 - `drop` — remove an entry, highlight, or whole section. Supply `path` and `why`.
 - `reword` — replace one text value. Supply `path`, `from` (exact current text), `to`, and `why`.
-- `reorder` — permute a sequence. Supply `path`, `order` (every index exactly once), and `why`.
+- `reorder` — permute a sequence or the existing cv.sections mapping (indices follow source key order). Supply `path`, `order` (every index exactly once), and `why`.
 - `set` — create or replace `cv.headline` only. Supply `path`, `value`, and `why`.
+
+- `import` — bring in evidence from the master. Supply `sourcePath`, destination `path`, and `why`.
+  Import a highlight into the same role's highlights sequence, an entry into its matching section,
+  or a missing section using its original name (source a whole section or a single selected entry). To replace a highlight, target its existing
+  scalar path; to enrich a skills bucket, target its existing details scalar and source a master
+  details scalar. Use `to` only for a faithful text adaptation (it can retain destination evidence
+  when replacing text); otherwise copy exactly. For sequence additions, `index` inserts before
+  that ORIGINAL index; null appends. Do not reword or drop the same destination in another op.
+  Projects must stay under the same employer, title, and dates. Importing an entire entry/section
+  copies all its content: choose focused highlight imports when possible. New sections append;
+  they cannot be reordered in the same plan. Do not target newly imported paths in other ops.
+  Leave `sourceExpect` null; the server records evidence fingerprints for safe review replay.
 
 Leave fields an operation does not use as `null`. Also return one `requirementActions` row for every
 ranked requirement, in the same order. The output schema supplied separately defines the exact shape.

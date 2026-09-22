@@ -10,12 +10,11 @@ import { cn } from '@/lib/utils'
 import type { SkillSummary } from '@/lib/skills/types'
 import { FeatureEnginePicker } from './FeatureEnginePicker'
 import type { RequirementAction } from '@/lib/tailoring/rules'
-import { PAGE_FILL_TARGET } from '@/lib/tailoring/pageFit'
 
 /**
  * The tailoring pass, under the editor.
  *
- * Every pass starts from the language-matched master profile, then cuts, orders
+ * Every pass starts from the general resume with master evidence, then cuts, orders
  * and minimally rewords it down to one page. The result is a proposal: it moves
  * the live preview, but nothing reaches the application files until Accept.
  *
@@ -56,7 +55,6 @@ export function TailorPanel({
   const [proposalPages, setProposalPages] = useState<number | null>(null)
   const [proposalFill, setProposalFill] = useState<number | null>(null)
   const [iterations, setIterations] = useState(0)
-  const [targetFill, setTargetFill] = useState(PAGE_FILL_TARGET)
   const [targetReached, setTargetReached] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -109,7 +107,6 @@ export function TailorPanel({
     setProposalPages(null)
     setProposalFill(null)
     setIterations(0)
-    setTargetFill(PAGE_FILL_TARGET)
     setTargetReached(false)
     const bufferBeforeRun = api.text
     let receivedProposal = false
@@ -150,7 +147,6 @@ export function TailorPanel({
           receivedCandidate = true
           const attempt = typeof e.attempt === 'number' ? e.attempt : 0
           setIterations(attempt)
-          setTargetFill(typeof e.target === 'number' ? e.target : PAGE_FILL_TARGET)
           setProposalPages(typeof e.pages === 'number' ? e.pages : null)
           setProposalFill(typeof e.fill === 'number' ? e.fill : null)
           setOps((e.ops as Op[]) ?? [])
@@ -178,7 +174,6 @@ export function TailorPanel({
           setProposalPages(typeof e.pages === 'number' ? e.pages : null)
           setProposalFill(typeof e.fill === 'number' ? e.fill : null)
           setIterations((current) => typeof e.iterations === 'number' ? e.iterations : current)
-          setTargetFill(typeof e.targetFill === 'number' ? e.targetFill : PAGE_FILL_TARGET)
           setTargetReached(e.targetReached === true)
           const yaml = e.yaml as string
           setProposalYaml(yaml)
@@ -301,7 +296,7 @@ export function TailorPanel({
               ? 'border border-[var(--color-bad)] text-[var(--color-bad)]'
               : 'bg-[var(--color-accent)] text-[var(--color-bg)]',
           )}
-          title="Builds from the language-matched master using the editable rulebook"
+          title="Tailors the general resume using the full master as evidence"
         >
           {phase === 'tailoring' ? <Spinner className="border-t-[var(--color-bg)]" /> : null}
           {phase === 'tailoring' ? 'Cancel tailoring' : snapshot ? 'Proposal ready' : 'Tailor resume'}
@@ -378,7 +373,7 @@ export function TailorPanel({
             </p>
             <p className="mt-1 text-[10px] font-medium text-[var(--color-faint)]">
               {proposalPages ?? '?'} page · {proposalFill ?? '?'}% fill · {iterations} agent iteration{iterations === 1 ? '' : 's'}
-              {targetReached ? ` · ${targetFill}% target reached` : ` · best result below ${targetFill}% target`}
+              {targetReached ? ' · one-page fit verified' : ' · page fit needs review'}
             </p>
           </div>
           <button
@@ -475,6 +470,9 @@ function ChangePreview({ op, disabled }: { op: Op; disabled: boolean }) {
       </span>
     )
   }
+  if (op.op === 'import') {
+    return <span className="mt-1 block text-[10px] text-[var(--color-ok)]">+ {shorten(op.to ?? op.sourceExpect)} (from master)</span>
+  }
   if (op.op === 'set') {
     return (
       <span className={cn('mt-1 block space-y-0.5 text-[10px] leading-snug', disabled && 'opacity-60')}>
@@ -513,7 +511,10 @@ function shorten(value: string | null | undefined): string {
 
 function reorderLabels(op: Op): { before: string | null; after: string } {
   try {
-    const items = JSON.parse(op.expect ?? '') as unknown[]
+    const parsed = JSON.parse(op.expect ?? '') as unknown
+    const items = op.path === 'cv.sections' && parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? Object.keys(parsed)
+      : parsed
     if (!Array.isArray(items)) throw new Error('not an array')
     const labels = items.map(itemLabel)
     return {

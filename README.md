@@ -18,6 +18,7 @@ it is deployable to a serverless host.
 | `/applications` | the tracker — sortable table over `workspace/state/applications.md`, with a 4-dot indicator for which documents each folder actually has |
 | `/applications/[key]` | canonical application workspace: overview and fit, persistent resume draft/preview, source files, runs, and assistant |
 | `/profile` | edit the English or French master resume — the source material for every tailored CV |
+| `/plan` | Apply plan — a board of saved job-search URLs to return to |
 | `/applications/[key]/editor` | compatibility redirect to the Resume tab in the canonical workspace |
 | Header **New application** | opens a posting dialog → engine analyzes it → creates a `Preparing` application and opens its workspace |
 
@@ -62,11 +63,15 @@ master resumes, not a multi-tenant product. To use it for yourself:
    `<You>.pdf`, ...). Optionally add `confidentialTerms` — names that should
    never appear on a generated resume or cover letter (e.g. a past employer's
    confidential clients); `src/lib/validate.ts` blocks a render if any appear.
-2. Add your own master resumes as
-   `workspace/resumes/masters/master-resume-english.yaml` and
-   `-french.yaml` (or just one language — see `templates/tailored-design.yaml`
+2. Add your own **master** resume(s) as
+   `workspace/resumes/masters/master-resume-english.yaml` and/or `-french.yaml`
+   — the complete, comprehensive evidence source (see `templates/tailored-design.yaml`
    for the required design block).
-3. `workspace/state/applications.md` starts empty; `workspace/applications/`
+3. Add your own **general** resume(s) as `workspace/resumes/own/cv-<you>-en.yaml`
+   and/or `-fr.yaml` (matching the slug from step 1) — a shorter, balanced CV that
+   seeds every new tailored application. Edit it on **Profile**. Tailoring then
+   imports stronger evidence from the master where it helps a specific posting.
+4. `workspace/state/applications.md` starts empty; `workspace/applications/`
    fills up as you create applications through the app.
 
 ## Make targets
@@ -128,7 +133,7 @@ The hard rules, enforced on every render:
 - no em dashes
 - the design block must match `templates/tailored-design.yaml` exactly, except
   `page.size`
-- one page, with first-page fill reported (95%+ is the target)
+- one page, with first-page fill reported for information only
 
 Each failure carries a dotted path — `cv.sections.Experience[0].highlights[2]` —
 and `yamlPath.ts` resolves that back to a character offset, so clicking a failure in
@@ -179,31 +184,35 @@ crash.
 The header **New application** dialog analyzes the posting, separates must requirements from nice-to-haves, and
 ranks each group using signals in the posting: core duties, repetition, placement,
 and explicit screening criteria. It seeds a per-application resume YAML from the
-language-matched master with the tailored design block stamped in.
+language-matched **general resume**, with the locked tailored design and JD paper size.
 
-Every **Tailor** click starts again from the current language-matched master. The
-selected CLI maps ranked requirements to evidence, prioritizes coverage of the
-highest-ranked musts, then proposes auditable cuts, reordering, minimal rewording,
-and an optional bridging headline. Keywords may only land naturally on evidence
-that already supports them. The app applies each proposed plan in a staging
-buffer and renders it; no application file is changed before review.
+Every **Tailor** click reads the current general resume, full master, and candidate
+guidance. The general resume supplies the editorial baseline; the master supplies
+additional factual evidence. The CLI considers both before deciding what to keep,
+reword, reorder, replace, add, or remove for the ranked requirements. A missing
+fact remains a gap.
 
-Tailoring is an eval-driven agent loop rather than a fixed one-shot completion.
-The selected Claude Code or Codex CLI keeps one native conversation for the run;
-after each complete operation plan, the app applies its factual guards, renders
-with RenderCV, and returns the measured page count and fill to that same agent.
-The fuller guard-safe one-page candidate stays live in the editor while the agent
-refines it without a fixed iteration limit, stopping at the legacy 95% fill target or genuine convergence. An
-overflowing candidate can never become the final proposal, and Accept re-renders
-the exact reviewed/manual-edited buffer server-side before saving it.
+Operations are reviewable edits, including source-referenced imports of master
+highlights, entries, skills text, and missing sections. Imports cannot move a
+project under a different role, and source fingerprints prevent replay against
+changed evidence. Existing sections can be reordered. The model cannot write
+arbitrary objects or change the locked design.
+
+The app validates and renders each plan in a staging buffer, with at most four
+attempts to repair rejected edits or overflow. A valid one-page proposal ends the
+loop: fill percentage is diagnostic, not a score to maximize. A no-change proposal
+is valid. Each repair uses the same general and master snapshots. No application
+file changes until acceptance, which re-renders the exact reviewed buffer. Page
+count alone does not verify visual readability.
 
 The model-facing instructions live in the filesystem skill registry under
 `workspace/state/skills/<id>/SKILL.md`. Open **Skills** in the navigation (or **Edit skill**
 beside **Tailor**) to edit, validate, duplicate, version, and restore them. The
 `analyze-job` skill receives the posting; `tailor-cv` receives the current analysis,
-source CV, and renderer feedback through required `{{…}}` placeholders. Frontmatter
-selects a trusted runner and its fixed capabilities. The structured output schemas
-and factual/structural guards remain code-enforced even when instructions change.
+general CV, master evidence, candidate guidance, and renderer feedback. The base
+inputs use required `{{…}}` placeholders. Frontmatter selects a trusted runner and
+its fixed capabilities. The structured output schemas and factual/structural
+guards remain code-enforced even when instructions change.
 
 Both **Analyze** and **Tailor** let you select any registered skill with the
 compatible runner. Every execution is recorded under `workspace/state/runs/<run-id>/` with
@@ -225,4 +234,20 @@ The model never receives direct file-write access.
 
 The master resumes are the source of truth. Add or correct experience on **Profile**,
 then tailor again; the tailoring pass does not invent accomplishments, change real
-position titles, append new content, or modify a master resume.
+position titles, or modify either source resume. Added evidence must come from the master.
+
+On **Profile**, **Review resume** reviews the selected English or French general
+or master resume, including unsaved edits, using the editor-chat AI settings and
+the versioned `review-resume` skill. Findings include strengths, prioritized issues,
+supported wording suggestions, and questions needing your input. Reviews never
+change or save the resume. Results stay in the current view, are marked outdated
+after edits, and reset when switching sources. Runs retain skill provenance and
+finding counts rather than the resume or full review. This is a text review;
+rendered PDF layout and extraction are not assessed.
+
+## Apply plan
+
+**Apply plan** (`/plan`) is a small board of saved job-search URLs — a filtered
+LinkedIn search, a company's careers page, whatever you return to routinely —
+each tagged with an optional track and notes. It's just a bookmark board backed
+by `workspace/state/saved-searches.json`; nothing here reads or scrapes those URLs.

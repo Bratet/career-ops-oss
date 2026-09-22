@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { EditorPane } from '@/components/EditorPane'
+import { ResumeReview } from '@/components/ResumeReview'
 import { Badge, Card, Empty } from '@/components/ui/primitives'
 import type { ProfileStats } from '@/lib/profile'
 import { SOURCES, sourceById } from './sources'
@@ -99,6 +100,7 @@ export function ProfileShell({
         general={source.family === 'ownCv'}
         onSave={save}
         chatScope={`profile:${src}`}
+        review={(api) => <ResumeReview yaml={api.text} source={source.id} />}
       />
     </div>
   )
