@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import { Nav } from '@/components/Nav'
-import { NewApplicationProvider } from '@/components/NewApplicationDialog'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -19,10 +18,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <NewApplicationProvider>
-          <Nav />
-          <main className="mx-auto max-w-[1600px] px-6 py-6">{children}</main>
-        </NewApplicationProvider>
+        <Nav />
+        <main className="mx-auto max-w-[1600px] px-4 py-7 sm:px-6 sm:py-8">{children}</main>
       </body>
     </html>
   )

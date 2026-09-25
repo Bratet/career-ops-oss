@@ -45,7 +45,8 @@ export function EditorPane({
   applicationKey,
   chatScope,
   general = false,
-  review,
+  onDirtyChange,
+  reviewSource,
 }: {
   initialYaml: string
   mode: 'master' | 'tailored'
@@ -58,13 +59,16 @@ export function EditorPane({
   /** Keeps chat history isolated to this exact resume document. */
   chatScope: string
   general?: boolean
-  review?: (api: EditorApi) => ReactNode
+  onDirtyChange?: (dirty: boolean) => void
+  reviewSource?: string
 }) {
   const [text, setText] = useState(initialYaml)
+  const [savedText, setSavedText] = useState(initialYaml)
   const [state, setState] = useState<RenderState | null>(null)
   const [rendering, setRendering] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [reviewPending, setReviewPending] = useState(false)
   const [tab, setTab] = useState<'chat' | 'editor'>('chat')
 
@@ -143,6 +147,7 @@ export function EditorPane({
   }, [])
 
   useEffect(() => { setSaved(false) }, [text])
+  useEffect(() => { onDirtyChange?.(text !== savedText || reviewPending) }, [text, savedText, reviewPending, onDirtyChange])
 
   function jumpTo(path: string) {
     const view = editorRef.current?.view
@@ -156,9 +161,14 @@ export function EditorPane({
   async function save(yaml = text) {
     if (!onSave) return
     setSaving(true)
+    setSaveError('')
     try {
       await onSave(yaml)
       setSaved(true)
+      setSavedText(yaml)
+    } catch (cause) {
+      setSaveError(cause instanceof Error ? cause.message : 'Could not save this resume. Try again.')
+      throw cause
     } finally {
       setSaving(false)
     }
@@ -171,7 +181,7 @@ export function EditorPane({
     setText,
     jumpTo,
     save,
-    markSaved: () => setSaved(true),
+    markSaved: () => { setSaved(true); setSavedText(text) },
     setReviewPending,
     reviewPending,
     showEditor: () => setTab('editor'),
@@ -183,7 +193,7 @@ export function EditorPane({
     <div className="flex h-[calc(100vh-8.5rem)] flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
-          <h1 className="text-sm font-semibold">{title}</h1>
+          <h2 className="text-sm font-semibold">{title}</h2>
           <Badge tone={mode === 'master' ? 'neutral' : 'accent'}>{general ? 'general' : mode}</Badge>
           {state ? (
             <span className="text-xs text-[var(--color-faint)] tnum">{state.ms}ms</span>
@@ -194,7 +204,7 @@ export function EditorPane({
           <PageBadge pages={state?.pages ?? null} fill={state?.fill ?? null} mode={mode} />
           {onSave ? (
             <button
-              onClick={() => void save()}
+              onClick={() => { void save().catch(() => {}) }}
               disabled={saving || reviewPending}
               className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-[var(--color-bg)] hover:opacity-90 disabled:opacity-50"
             >
@@ -204,7 +214,7 @@ export function EditorPane({
         </div>
       </div>
 
-      {review?.(api)}
+      {saveError && <p role="alert" className="text-xs text-[var(--color-bad)]">{saveError}</p>}
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-2">
         <Card className="flex min-h-0 flex-col overflow-hidden">
           <div className="flex shrink-0 items-center gap-1 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5" role="tablist" aria-label="CV editing mode">
@@ -241,6 +251,7 @@ export function EditorPane({
               mode={mode}
               applicationKey={applicationKey}
               chatScope={chatScope}
+              reviewSource={reviewSource}
               tailoring={tools?.(api)}
             />
           </div>

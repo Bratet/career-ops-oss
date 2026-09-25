@@ -36,7 +36,7 @@ export async function POST(req: Request) {
 
   try {
     await access(dir)
-    return NextResponse.json({ error: `output/${folder} already exists` }, { status: 409 })
+    return NextResponse.json({ error: `workspace/applications/${folder} already exists` }, { status: 409 })
   } catch {
     // does not exist, which is what we want
   }

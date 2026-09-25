@@ -1,3 +1,5 @@
+import { resumeReviewParser, type ResumeReview } from './resumeReview'
+
 const EDITOR_PREFIX = 'career-ops-editor-chat:v1:'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const MAX_TURNS = 100
@@ -23,6 +25,14 @@ export interface EditorChatTurn {
     runId?: string
     events: ChatSkillEvent[]
   }
+  review?: {
+    report: ResumeReview
+    reply: string
+    fingerprint: string
+    runId: string
+    skillVersion: number
+    engine: string
+  }
   proposal?: {
     before: string
     after: string
@@ -34,6 +44,7 @@ export interface EditorChatSnapshot {
   sessionId: string
   turns: EditorChatTurn[]
   draft: string
+  reviewMode?: boolean
 }
 
 /** Keep the existing chat as Resume & AI history; Overview gets its own session. */
@@ -51,6 +62,7 @@ export function serializeEditorChatSnapshot(snapshot: EditorChatSnapshot): strin
     sessionId: snapshot.sessionId,
     turns: snapshot.turns.slice(-MAX_TURNS),
     draft: snapshot.draft.slice(0, MAX_DRAFT),
+    reviewMode: snapshot.reviewMode === true,
   })
 }
 
@@ -66,6 +78,7 @@ export function parseEditorChatSnapshot(value: string | null): EditorChatSnapsho
       sessionId: parsed.sessionId,
       turns: (turns as EditorChatTurn[]).slice(-MAX_TURNS),
       draft: parsed.draft.slice(0, MAX_DRAFT),
+      reviewMode: parsed.reviewMode === true,
     }
   } catch {
     return null
@@ -82,6 +95,14 @@ function parseTurn(value: unknown): EditorChatTurn | null {
   if (typeof row.engine === 'string') turn.engine = row.engine
   if (typeof row.reasoning === 'string') turn.reasoning = row.reasoning
   if (typeof row.stopped === 'boolean') turn.stopped = row.stopped
+  if (row.review !== undefined) {
+    if (!row.review || typeof row.review !== 'object') return null
+    const review = row.review as Record<string, unknown>
+    const report = resumeReviewParser.safeParse(review.report)
+    if (!report.success || typeof review.reply !== 'string' || typeof review.fingerprint !== 'string'
+      || typeof review.runId !== 'string' || typeof review.skillVersion !== 'number' || typeof review.engine !== 'string') return null
+    turn.review = { report: report.data, reply: review.reply, fingerprint: review.fingerprint, runId: review.runId, skillVersion: review.skillVersion, engine: review.engine }
+  }
   if (row.skillRun !== undefined) {
     if (!row.skillRun || typeof row.skillRun !== 'object') return null
     const skillRun = row.skillRun as Record<string, unknown>

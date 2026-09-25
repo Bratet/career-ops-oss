@@ -1,69 +1,60 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { resumeReviewParser, type ResumeReview as Review } from '@/lib/resumeReview'
-import { Spinner } from './ui/primitives'
+import type { EditorChatTurn } from '@/lib/chatPersistence'
 
-export function ResumeReview({ yaml, source }: { yaml: string; source: string }) {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [result, setResult] = useState<{ review: Review; yaml: string; runId: string; skillVersion: number; engine: string } | null>(null)
-  const [open, setOpen] = useState(true)
-  const controller = useRef<AbortController | null>(null)
-  useEffect(() => () => controller.current?.abort(), [])
-
-  async function review() {
-    if (controller.current) return
-    const abort = new AbortController()
-    controller.current = abort
-    setBusy(true)
-    setError('')
-    try {
-      const response = await fetch('/api/profile/review', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ yaml, source }), signal: abort.signal,
-      })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error ?? 'Review failed. Try again.')
-      setResult({ ...data, review: resumeReviewParser.parse(data.review), yaml })
-      setOpen(true)
-    } catch (error) {
-      if (!abort.signal.aborted) setError(error instanceof Error ? error.message : 'Review failed. Try again.')
-    } finally {
-      controller.current = null
-      setBusy(false)
-    }
-  }
-
-  const button = 'rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--color-surface-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] disabled:opacity-50'
+export function ResumeReview({ review, current, stale, onDiscuss }: {
+  review: NonNullable<EditorChatTurn['review']>
+  current: boolean
+  stale: boolean
+  onDiscuss: (message: string) => void
+}) {
+  const report = review.report
   return (
-    <section aria-label="Resume review" className="shrink-0 space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <button className={button} disabled={busy || !yaml.trim()} onClick={() => void review()}>{busy ? <span className="flex items-center gap-2"><Spinner />Reviewing…</span> : result ? 'Review resume again' : 'Review resume'}</button>
-        {busy ? <button className={button} onClick={() => controller.current?.abort()}>Cancel review</button> : null}
-        {result ? <button className={button} aria-expanded={open} aria-controls="resume-review-results" onClick={() => setOpen(!open)}>{open ? 'Hide review' : 'Show review'}</button> : null}
-        <Link href="/skills/review-resume" className="text-xs text-[var(--color-muted)] underline underline-offset-4">Edit review skill</Link>
+    <div className="mt-3 border-t pt-3">
+      {stale && current && <p role="status" className="mb-3 rounded-lg bg-[var(--color-warn-soft)] px-3 py-2 text-xs text-[var(--color-warn)]">This review describes an earlier draft. Run Review resume again to update it.</p>}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold">{current ? 'Current review' : 'Earlier review'}</h3>
+        <Link href={`/runs/${review.runId}`} className="text-[11px] text-[var(--color-muted)] underline underline-offset-4">{review.engine} · Skill v{review.skillVersion} · Inspect run</Link>
       </div>
-      <p role="status" className="text-xs text-[var(--color-muted)]">{busy ? 'Reading this draft using your editor AI settings. This may take a minute.' : 'Reviews the current draft, including unsaved edits. Your resume stays unchanged.'}</p>
-      {error ? <p role="alert" className="text-sm text-[var(--color-bad)]">{error}</p> : null}
-      {result && open ? (
-        <div id="resume-review-results" className="max-h-[45vh] space-y-4 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm leading-relaxed break-words">
-          {result.yaml !== yaml ? <p role="status" className="text-[var(--color-warn)]">The draft has changed since this review. Review again for updated findings.</p> : null}
-          <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">Resume review</h2><Link href={`/runs/${result.runId}`} className="text-xs underline underline-offset-4">{result.engine} · Skill v{result.skillVersion} · Inspect run</Link></div>
-          <p>{result.review.assessment}</p>
-          {result.review.strengths.length ? <div><h3 className="font-medium">What works</h3><ul className="mt-1 list-disc space-y-1 pl-5">{result.review.strengths.map((text, i) => <li key={i}>{text}</li>)}</ul></div> : null}
-          {result.review.findings.length ? <div><h3 className="font-medium">Priority findings</h3><ol className="mt-2 space-y-4">{result.review.findings.map((finding, i) => <li key={i} className="space-y-1 border-t border-[var(--color-border)] pt-3">
-            <h4 className="font-medium">{finding.location}</h4>
-            <p className="text-xs text-[var(--color-muted)]">{finding.kind === 'question' ? 'Needs your input' : finding.kind === 'render-check' ? 'Needs PDF verification' : 'Supported by current evidence'}</p>
-            {finding.excerpt ? <blockquote className="text-[var(--color-muted)]">“{finding.excerpt}”</blockquote> : null}
-            <p>{finding.issue}</p><p>{finding.recommendation}</p>
-            {finding.suggestedWording ? <p><span className="font-medium">Suggested wording: </span>{finding.suggestedWording}</p> : null}
-          </li>)}</ol></div> : <p>No priority issues identified.</p>}
-          {result.review.questions.length ? <div><h3 className="font-medium">Questions for you</h3><ul className="mt-1 list-disc space-y-1 pl-5">{result.review.questions.map((text, i) => <li key={i}>{text}</li>)}</ul></div> : null}
-          <p className="text-xs text-[var(--color-muted)]">Text review only. PDF layout, reading order, and links have not been verified.</p>
+      {current ? (
+        <div className="mt-3 space-y-4">
+          <p className="text-sm leading-relaxed">{report.assessment}</p>
+          {report.strengths.length > 0 && (
+            <section>
+              <h4 className="text-xs font-semibold">Keep what works</h4>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-xs leading-relaxed text-[var(--color-muted)]">{report.strengths.map((item, index) => <li key={index}>{item}</li>)}</ul>
+            </section>
+          )}
+          <section>
+            <h4 className="text-xs font-semibold">Priority findings</h4>
+            {report.findings.length ? (
+              <ol className="mt-2 space-y-2">
+                {report.findings.map((finding, index) => (
+                  <li key={index} className="rounded-lg border bg-[var(--color-bg)] p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <p className="text-xs font-semibold">{finding.location}</p>
+                      <span className="text-[10px] text-[var(--color-muted)]">{finding.kind === 'question' ? 'Needs your input' : finding.kind === 'render-check' ? 'Check the PDF' : 'Supported edit'}</span>
+                    </div>
+                    {finding.excerpt && <blockquote className="mt-2 border-l pl-3 text-xs text-[var(--color-muted)]">“{finding.excerpt}”</blockquote>}
+                    <p className="mt-2 text-xs leading-relaxed">{finding.issue}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-[var(--color-muted)]">{finding.recommendation}</p>
+                    {finding.suggestedWording && <p className="mt-2 text-xs"><span className="font-semibold">Suggested wording: </span>{finding.suggestedWording}</p>}
+                    <button type="button" onClick={() => onDiscuss(`I want to discuss your finding about ${finding.location}: ${finding.issue}`)} className="mt-3 text-xs font-medium text-[var(--color-accent)] hover:underline">Discuss this finding</button>
+                  </li>
+                ))}
+              </ol>
+            ) : <p className="mt-1 text-xs text-[var(--color-muted)]">No priority issues identified.</p>}
+          </section>
+          {report.questions.length > 0 && (
+            <section>
+              <h4 className="text-xs font-semibold">Questions for you</h4>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-xs leading-relaxed text-[var(--color-muted)]">{report.questions.map((item, index) => <li key={index}>{item}</li>)}</ul>
+            </section>
+          )}
+          <p className="text-[11px] text-[var(--color-muted)]">Text review only. PDF layout, reading order, and links have not been verified. Review findings do not edit your resume.</p>
         </div>
-      ) : null}
-    </section>
+      ) : <p className="mt-2 text-xs text-[var(--color-muted)]">{report.assessment}</p>}
+    </div>
   )
 }

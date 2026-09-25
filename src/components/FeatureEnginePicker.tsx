@@ -25,6 +25,7 @@ export function FeatureEnginePicker({
 }) {
   const [state, setState] = useState<EngineState | null>(null)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -34,14 +35,15 @@ export function FeatureEnginePicker({
         if (!response.ok) throw new Error(value.error ?? 'could not load AI preference')
         return value
       })
-      .then((value) => { if (alive) setState(value as EngineState) })
-      .catch(() => { if (alive) setState(null) })
+      .then((value) => { if (alive) { setState(value as EngineState); setError(null) } })
+      .catch((reason) => { if (alive) { setState(null); setError((reason as Error).message) } })
     return () => { alive = false }
   }, [feature])
 
   async function save(patch: { engine?: string; model?: string }) {
     const previousEngine = state?.engine
     setSaving(true)
+    setError(null)
     try {
       const response = await fetch('/api/engine', {
         method: 'PUT',
@@ -52,6 +54,8 @@ export function FeatureEnginePicker({
       if (!response.ok) throw new Error(data.error ?? 'could not save AI preference')
       setState(data)
       if (patch.engine && patch.engine !== previousEngine) onEngineChange?.()
+    } catch (reason) {
+      setError((reason as Error).message)
     } finally {
       setSaving(false)
     }
@@ -64,7 +68,7 @@ export function FeatureEnginePicker({
   const selectClass = `${compact ? 'h-7' : 'h-8'} rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-muted)] outline-none focus:border-[var(--color-accent)] disabled:opacity-40`
 
   return (
-    <div className="flex items-center gap-1.5" title={status?.ok ? status.version : status?.reason ?? 'Loading AI preference…'}>
+    <div className="flex flex-wrap items-center gap-1.5" title={status?.ok ? status.version : status?.reason ?? 'Loading AI preference…'}>
       <span className="text-[10px] uppercase tracking-wide text-[var(--color-faint)]">LLM</span>
       <select
         value={state?.engine ?? ''}
@@ -75,7 +79,7 @@ export function FeatureEnginePicker({
       >
         {!state ? <option value="">Loading…</option> : null}
         {state?.statuses.map((item) => (
-          <option key={item.id} value={item.id}>{item.id}{item.ok ? '' : ' (unavailable)'}</option>
+          <option key={item.id} value={item.id} disabled={!item.ok && state.engine !== item.id}>{item.id}{item.ok ? '' : ' (unavailable)'}</option>
         ))}
       </select>
       <select
@@ -90,6 +94,7 @@ export function FeatureEnginePicker({
           <option key={model.id || 'default'} value={model.id}>{model.label}</option>
         ))}
       </select>
+      {error ? <p role="alert" className="basis-full text-xs text-[var(--color-bad)]">{error}</p> : null}
     </div>
   )
 }

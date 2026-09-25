@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { resumeReviewParser, resumeReviewPrompt, reviewRequestParser } from '../src/lib/resumeReview'
+import { resumeFingerprint, resumeReviewParser, resumeReviewPrompt, resumeReviewReplyParser, reviewRequestParser } from '../src/lib/resumeReview'
 import { POST } from '../src/app/api/profile/review/route'
 import { getSkillForRunner } from '../src/lib/skills/registry'
 
@@ -16,9 +16,19 @@ const review = { assessment: 'Clear experience.', strengths: ['Specific ownershi
 assert.deepEqual(resumeReviewParser.parse(review), review)
 assert.equal(resumeReviewParser.safeParse({ ...review, findings: [{ ...review.findings[0], kind: 'apply-edit' }] }).success, false)
 assert.equal(resumeReviewParser.safeParse({ assessment: 'Incomplete' }).success, false)
+assert.equal(resumeReviewReplyParser.safeParse({ reply: 'I agree; that finding was too broad.', review }).success, true)
+assert.equal(resumeReviewReplyParser.safeParse({ reply: '', review }).success, false)
+assert.notEqual(resumeFingerprint(input.yaml), resumeFingerprint(input.yaml + ' '))
+const feedback = reviewRequestParser.parse({ ...input, message: 'That is intentional. Why change it?', previousReview: review, conversation: [{ role: 'assistant', content: 'Previous review' }] })
+assert.equal(reviewRequestParser.safeParse({ ...input, message: 'Why?' }).success, false)
+assert.equal(reviewRequestParser.safeParse({ ...input, previousReview: review }).success, false)
 const skill = await getSkillForRunner('review-resume', 'text-artifact')
 const prompt = resumeReviewPrompt(skill.instructions, parsed)
 assert.ok(prompt.includes(JSON.stringify(parsed)))
 assert.ok(prompt.includes(skill.instructions))
+const feedbackPrompt = resumeReviewPrompt(skill.instructions, feedback)
+assert.ok(feedbackPrompt.includes('withdraw'))
+assert.ok(feedbackPrompt.includes('That is intentional. Why change it?'))
+assert.ok(feedbackPrompt.includes(JSON.stringify(review)))
 assert.deepEqual(input, { source: 'master-en', yaml: 'cv:\n  name: Candidate\n  sections: {}\n' })
 console.log('Resume review: input validation, route rejection, skill binding, and output validation pass')

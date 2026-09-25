@@ -1,5 +1,5 @@
 /**
- * The master resumes the Profile tab shows.
+ * The general and master resume sources shown on the Profile page.
  *
  * Not in shell.tsx: that file is a client component, and the page resolves the
  * source on the server to know which file to read.

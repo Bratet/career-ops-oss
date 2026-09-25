@@ -39,6 +39,7 @@ const sessionId = '123e4567-e89b-42d3-a456-426614174000'
 const snapshot = parseEditorChatSnapshot(serializeEditorChatSnapshot({
   sessionId,
   draft: 'Keep this unfinished message',
+  reviewMode: true,
   turns: [
     { role: 'user', content: 'Remove summary' },
     {
@@ -55,12 +56,22 @@ const snapshot = parseEditorChatSnapshot(serializeEditorChatSnapshot({
       },
       proposal: { before: 'cv:\n  summary: old\n', after: 'cv: {}\n', status: 'pending' },
     },
+    {
+      role: 'assistant',
+      content: 'Review: clear summary.',
+      review: {
+        report: { assessment: 'Clear summary.', strengths: [], findings: [], questions: [] },
+        reply: 'I reviewed the draft.', fingerprint: '12:abc', runId: 'run-review', skillVersion: 3, engine: 'claude',
+      },
+    },
   ],
 }))
-check('editor conversation survives serialization', snapshot?.turns.length === 2 && snapshot.turns[1].proposal?.status === 'pending')
+check('editor conversation survives serialization', snapshot?.turns.length === 3 && snapshot.turns[1].proposal?.status === 'pending')
 check('skill transcript survives serialization', snapshot?.turns[1].skillRun?.events.length === 2 && snapshot.turns[1].skillRun?.runId === 'run-123')
 check('unfinished editor draft survives serialization', snapshot?.draft === 'Keep this unfinished message')
 check('editor session id survives serialization', snapshot?.sessionId === sessionId)
+check('review discussion mode survives serialization', snapshot?.reviewMode === true)
+check('resume review survives serialization', snapshot?.turns[2].review?.report.assessment === 'Clear summary.' && snapshot.turns[2].review?.skillVersion === 3)
 check('Overview and Resume AI have separate histories', editorChatStorageKey(applicationChatScope('example', 'overview')) !== editorChatStorageKey(applicationChatScope('example', 'resume')))
 check('existing history remains available in Resume AI', applicationChatScope('example', 'resume') === 'application:example')
 check('overview histories stay separate across applications', applicationChatScope('example', 'overview') !== applicationChatScope('another', 'overview'))

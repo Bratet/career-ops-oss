@@ -240,7 +240,7 @@ function FileList({ app }: { app: Application }) {
   return (
     <div>
       <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-5 py-2.5">
-        <code className="text-xs text-[var(--color-faint)]">output/{app.folder.folder}/</code>
+        <code className="text-xs text-[var(--color-faint)]">workspace/applications/{app.folder.folder}/</code>
         <DocDots has={app.folder.has} />
       </div>
       <ul className="divide-y divide-[var(--color-border)]">

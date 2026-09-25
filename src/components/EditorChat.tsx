@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Pencil, Square } from 'lucide-react'
+import Link from 'next/link'
+import { ClipboardCheck, Pencil, Square } from 'lucide-react'
 import { Badge, Empty, Spinner } from './ui/primitives'
+import { ResumeReview } from './ResumeReview'
 import type { EditorApi } from './EditorPane'
 import { readNdjson } from '@/lib/ndjson'
 import type { Mode } from '@/lib/validate'
@@ -11,6 +13,7 @@ import { PROFILE_UPDATE_REQUEST } from '@/lib/skills/learning'
 import { LearnFromChat } from './LearnFromChat'
 import { FeatureEnginePicker } from './FeatureEnginePicker'
 import { chatSkillForMessage } from '@/lib/chatSkills'
+import { resumeFingerprint, resumeReviewParser, type ResumeReview as Review } from '@/lib/resumeReview'
 import {
   editorChatStorageKey,
   parseEditorChatSnapshot,
@@ -27,6 +30,7 @@ export function EditorChat({
   mode,
   applicationKey,
   chatScope,
+  reviewSource,
   tailoring,
   tailoringSkill,
   autoStart = false,
@@ -37,6 +41,7 @@ export function EditorChat({
   mode: Mode
   applicationKey?: string
   chatScope: string
+  reviewSource?: string
   tailoring?: ReactNode
   /** Kick off tailoringSkill.run() the first time this chat is opened empty, instead of waiting for a typed request. */
   autoStart?: boolean
@@ -62,11 +67,19 @@ export function EditorChat({
   const [resolving, setResolving] = useState<number | null>(null)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [editingText, setEditingText] = useState('')
+  const [resumeReviewMode, setResumeReviewMode] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
+  const reviewStartRef = useRef<HTMLDivElement>(null)
+  const messageRef = useRef<HTMLTextAreaElement>(null)
   const sessionRef = useRef('')
   const autoStartedRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
   const pendingProposal = turns.some((turn) => turn.proposal?.status === 'pending')
+  const latestResumeReviewIndex = turns.reduce((found, turn, index) => turn.review ? index : found, -1)
+  const latestResumeReview = latestResumeReviewIndex >= 0 ? turns[latestResumeReviewIndex].review : undefined
+  const staleResumeReview = Boolean(latestResumeReview && latestResumeReview.fingerprint !== resumeFingerprint(api.text))
+
+  useEffect(() => () => abortRef.current?.abort(), [])
 
   useEffect(() => {
     setHydrated(false)
@@ -82,6 +95,7 @@ export function EditorChat({
     setLiveSkillEvents([])
     setEditingIndex(null)
     setEditingText('')
+    setResumeReviewMode(saved?.reviewMode === true)
     setHydrated(true)
 
     const pending = [...nextTurns].reverse().find((turn) => turn.proposal?.status === 'pending')?.proposal
@@ -95,7 +109,10 @@ export function EditorChat({
     const saved = readEditorChat('career-ops-editor-stream')
     if (saved !== null) setStreamResponses(saved === 'true')
   }, [])
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [turns, busy, activity, liveReasoning, liveSkillEvents])
+  useEffect(() => {
+    if (turns.at(-1)?.review && !busy) reviewStartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    else endRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [turns, busy, activity, liveReasoning, liveSkillEvents])
 
   useEffect(() => {
     if (!hydrated || !autoStart || !tailoringSkill || autoStartedRef.current) return
@@ -121,7 +138,22 @@ export function EditorChat({
     setLiveSkillEvents([])
     setEditingIndex(null)
     setEditingText('')
-    storeEditorChat(storageKey, { sessionId: sessionRef.current, turns: [], draft: '' })
+    setResumeReviewMode(false)
+    storeEditorChat(storageKey, { sessionId: sessionRef.current, turns: [], draft: '', reviewMode: false })
+  }
+
+  function exitResumeReview() {
+    setResumeReviewMode(false)
+    storeEditorChat(storageKey, { sessionId: sessionRef.current, turns, draft: message, reviewMode: false })
+    messageRef.current?.focus()
+  }
+
+  function discussFinding(value: string) {
+    if (busy || staleResumeReview) return
+    setResumeReviewMode(true)
+    setMessage(value)
+    storeEditorChat(storageKey, { sessionId: sessionRef.current, turns, draft: value, reviewMode: true })
+    messageRef.current?.focus()
   }
 
   function stop() {
@@ -129,7 +161,7 @@ export function EditorChat({
   }
 
   function startEdit(index: number) {
-    if (busy || api.reviewPending || turns[index]?.role !== 'user') return
+    if (busy || resumeReviewMode || api.reviewPending || turns[index]?.role !== 'user' || turns[index + 1]?.review) return
     setEditingIndex(index)
     setEditingText(turns[index].content)
   }
@@ -153,24 +185,28 @@ export function EditorChat({
     }
     const truncated = turns.slice(0, index)
     setTurns(truncated)
-    storeEditorChat(storageKey, { sessionId: sessionRef.current, turns: truncated, draft: '' })
+    storeEditorChat(storageKey, { sessionId: sessionRef.current, turns: truncated, draft: '', reviewMode: resumeReviewMode })
     setEditingIndex(null)
     setEditingText('')
     await send(text, truncated)
   }
 
-  async function send(request?: string, baseHistory?: DisplayTurn[]) {
+  async function send(request?: string, baseHistory?: DisplayTurn[], startResumeReview = false) {
     const userMessage = (request ?? message).trim()
     if (!userMessage || busy) return
+    if (resumeReviewMode && staleResumeReview && !startResumeReview) return
+    const activeReviewMode = Boolean(reviewSource && (startResumeReview || resumeReviewMode))
     const userTurn: DisplayTurn = { role: 'user', content: userMessage }
-    const history = [...(baseHistory ?? turns), userTurn]
+    const earlierTurns = baseHistory ?? turns
+    const history = [...earlierTurns, userTurn]
     const activeStorageKey = storageKey
     const activeSessionId = sessionRef.current
+    const activeDraft = startResumeReview ? message : ''
     setTurns(history)
-    setMessage('')
-    storeEditorChat(activeStorageKey, { sessionId: activeSessionId, turns: history, draft: '' })
+    setMessage(activeDraft)
+    storeEditorChat(activeStorageKey, { sessionId: activeSessionId, turns: history, draft: activeDraft, reviewMode: activeReviewMode })
     setBusy(true)
-    setActivity('Starting the editor agent…')
+    setActivity(activeReviewMode ? 'Starting resume review…' : 'Starting the editor agent…')
     setLiveReasoning('')
     setLiveSkillEvents([])
     setError(null)
@@ -182,6 +218,42 @@ export function EditorChat({
     let doneEvent: Record<string, unknown> | null = null
 
     try {
+      if (activeReviewMode && reviewSource) {
+        setActivity(startResumeReview ? 'Reviewing the current draft…' : 'Reconsidering the review…')
+        const previous = startResumeReview ? undefined : latestResumeReview?.report
+        const response = await fetch('/api/profile/review', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            yaml: api.text,
+            source: reviewSource,
+            ...(previous ? {
+              message: userMessage,
+              previousReview: previous,
+              conversation: (baseHistory ?? turns).slice(-20).map(({ role, content }) => ({ role, content: content.slice(0, 16000) })),
+            } : {}),
+          }),
+        })
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error ?? 'Could not review this resume.')
+        const report = resumeReviewParser.parse(result.review) as Review
+        const reply = typeof result.reply === 'string' && result.reply.trim()
+          ? result.reply.trim()
+          : 'I reviewed the current draft. You can question any finding below.'
+        const nextTurns: DisplayTurn[] = [...history, {
+          role: 'assistant',
+          content: formatResumeReviewForConversation(reply, report),
+          review: {
+            report, reply, fingerprint: resumeFingerprint(api.text),
+            runId: result.runId, skillVersion: result.skillVersion, engine: result.engine,
+          },
+        }]
+        setTurns(nextTurns)
+        setResumeReviewMode(true)
+        storeEditorChat(activeStorageKey, { sessionId: activeSessionId, turns: nextTurns, draft: activeDraft, reviewMode: true })
+        return
+      }
       if (tailoringSkill && chatSkillForMessage(userMessage) === 'tailor-cv') {
         setActivity(null)
         const result = await tailoringSkill.run({
@@ -199,7 +271,7 @@ export function EditorChat({
           skillRun: { skillId: result.skillId, runId: result.runId, events: skillEvents },
         }]
         setTurns(nextTurns)
-        storeEditorChat(activeStorageKey, { sessionId: activeSessionId, turns: nextTurns, draft: '' })
+        storeEditorChat(activeStorageKey, { sessionId: activeSessionId, turns: nextTurns, draft: '', reviewMode: activeReviewMode })
         return
       }
 
@@ -233,7 +305,7 @@ export function EditorChat({
           setActivity(null)
           const nextTurns: DisplayTurn[] = [...history, { role: 'assistant', content: streamed }]
           setTurns(nextTurns)
-          storeEditorChat(activeStorageKey, { sessionId: activeSessionId, turns: nextTurns, draft: '' })
+          storeEditorChat(activeStorageKey, { sessionId: activeSessionId, turns: nextTurns, draft: '', reviewMode: activeReviewMode })
           return
         }
         if (event.type === 'reasoning' && typeof event.text === 'string') {
@@ -265,14 +337,20 @@ export function EditorChat({
         proposal: changedYaml ? { before: api.text, after: changedYaml, status: 'pending' } : undefined,
       }]
       setTurns(nextTurns)
-      storeEditorChat(activeStorageKey, { sessionId: activeSessionId, turns: nextTurns, draft: '' })
+      storeEditorChat(activeStorageKey, { sessionId: activeSessionId, turns: nextTurns, draft: '', reviewMode: activeReviewMode })
       setActivity(null)
       setLiveReasoning('')
       if (userMessage === PROFILE_UPDATE_REQUEST || result.analysisUpdated === true) {
         try { await onProfileUpdated?.() } catch { setError('Changes were saved, but the overview could not refresh. Reload to see the updated analysis.') }
       }
     } catch (reason) {
-      if ((reason as Error).name === 'AbortError') {
+      if (startResumeReview && !latestResumeReview) setResumeReviewMode(false)
+      if (activeReviewMode) {
+        setTurns(earlierTurns)
+        setMessage(startResumeReview ? activeDraft : userMessage)
+        if ((reason as Error).name !== 'AbortError') setError((reason as Error).message)
+        storeEditorChat(activeStorageKey, { sessionId: activeSessionId, turns: earlierTurns, draft: startResumeReview ? activeDraft : userMessage, reviewMode: resumeReviewMode })
+      } else if ((reason as Error).name === 'AbortError') {
         const stoppedTurn: DisplayTurn | null = streamed || skillEvents.length
           ? {
               role: 'assistant',
@@ -284,12 +362,12 @@ export function EditorChat({
           : null
         const nextTurns = stoppedTurn ? [...history, stoppedTurn] : history
         setTurns(nextTurns)
-        storeEditorChat(activeStorageKey, { sessionId: activeSessionId, turns: nextTurns, draft: '' })
+        storeEditorChat(activeStorageKey, { sessionId: activeSessionId, turns: nextTurns, draft: activeDraft, reviewMode: resumeReviewMode })
       } else {
         setTurns(history)
         setError((reason as Error).message)
-        setMessage(userMessage)
-        storeEditorChat(activeStorageKey, { sessionId: activeSessionId, turns: history, draft: userMessage })
+        setMessage(startResumeReview ? activeDraft : userMessage)
+        storeEditorChat(activeStorageKey, { sessionId: activeSessionId, turns: history, draft: startResumeReview ? activeDraft : userMessage, reviewMode: resumeReviewMode })
       }
     } finally {
       abortRef.current = null
@@ -329,7 +407,7 @@ export function EditorChat({
       const next = current.map((turn, turnIndex) => turnIndex === index && turn.proposal
         ? { ...turn, proposal: { ...turn.proposal, status } }
         : turn)
-      storeEditorChat(storageKey, { sessionId: sessionRef.current, turns: next, draft: message })
+      storeEditorChat(storageKey, { sessionId: sessionRef.current, turns: next, draft: message, reviewMode: resumeReviewMode })
       return next
     })
   }
@@ -356,6 +434,25 @@ export function EditorChat({
           New chat
         </button>
       </div>
+
+      {reviewSource && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
+          <button
+            type="button"
+            onClick={() => void send('Review this resume.', undefined, true)}
+            disabled={!hydrated || busy || api.reviewPending || pendingProposal || !api.text.trim()}
+            className="inline-flex min-h-8 items-center gap-1.5 rounded-md bg-[var(--color-accent-soft)] px-2.5 text-xs font-medium text-[var(--color-accent)] hover:opacity-80 disabled:opacity-40"
+          >
+            <ClipboardCheck size={14} aria-hidden="true" />
+            {latestResumeReview ? 'Review current draft' : 'Review resume'}
+          </button>
+          {resumeReviewMode && latestResumeReview ? (
+            <button type="button" onClick={exitResumeReview} disabled={busy} className="min-h-8 rounded-md border px-2.5 text-xs font-medium hover:bg-[var(--color-surface-2)] disabled:opacity-40">Back to editing</button>
+          ) : null}
+          <span className="text-[11px] text-[var(--color-muted)]">{resumeReviewMode ? staleResumeReview ? 'Draft changed · run a new review to continue' : 'Question or challenge any finding below' : 'Review includes unsaved edits and leaves the resume unchanged'}</span>
+          <Link href="/skills/review-resume" className="ml-auto text-[11px] text-[var(--color-muted)] underline underline-offset-4">Edit review skill</Link>
+        </div>
+      )}
 
       {applicationKey ? <LearnFromChat key={storageKey + sessionRef.current} skillId={reviewOnly ? 'analyze-job' : 'tailor-cv'} onUpdateProfile={() => void send(PROFILE_UPDATE_REQUEST)} turns={turns} disabled={!hydrated || busy || pendingProposal || api.reviewPending} /> : null}
 
@@ -397,16 +494,20 @@ export function EditorChat({
           ) : (
           <div
             key={index}
+            ref={turn.review && index === latestResumeReviewIndex ? reviewStartRef : undefined}
             className={turn.role === 'user'
               ? 'group ml-auto max-w-[88%] rounded-xl rounded-br-sm bg-[var(--color-accent-soft)] px-3 py-2 text-sm leading-relaxed'
               : 'max-w-[94%] rounded-xl rounded-bl-sm border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2.5 text-sm leading-relaxed'}
           >
-            <p className="whitespace-pre-wrap">{turn.content}</p>
+            <p className="whitespace-pre-wrap">{turn.review ? turn.review.reply : turn.content}</p>
+            {turn.role === 'assistant' && turn.review ? (
+              <ResumeReview review={turn.review} current={index === latestResumeReviewIndex} stale={staleResumeReview} onDiscuss={discussFinding} />
+            ) : null}
             {turn.role === 'user' ? (
               <div className="mt-1 flex justify-end opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                 <button
                   onClick={() => startEdit(index)}
-                  disabled={busy || api.reviewPending}
+                  disabled={busy || resumeReviewMode || api.reviewPending || Boolean(turns[index + 1]?.review)}
                   className="flex items-center gap-1 text-[10px] text-[var(--color-muted)] hover:text-[var(--color-accent)] disabled:pointer-events-none disabled:opacity-0"
                 >
                   <Pencil size={10} aria-hidden="true" /> Edit &amp; rerun
@@ -436,10 +537,11 @@ export function EditorChat({
           )
         )) : !tailoring ? (
           <Empty
-            title={reviewOnly ? 'Let’s check whether this role works for you' : tailoringSkill ? 'What should we do with this resume?' : 'Edit with a CLI agent'}
+            title={reviewOnly ? 'Let’s check whether this role works for you' : reviewSource ? 'Review or edit this resume' : tailoringSkill ? 'What should we do with this resume?' : 'Edit with a CLI agent'}
             hint={reviewOnly ? 'Ask about work authorization, discuss a gap, or correct the analysis. No resume tailoring starts until you request it.' : tailoringSkill
               ? 'Discuss the tailored draft, ask for changes, or compare it with anything in your repository. I can consult your masters, earlier applications, and notes.'
-              : 'This is a persistent Claude/Codex session with file tools and buffer history. Ask it to edit, explain, compare, restore, or undo.'}
+              : reviewSource ? 'Run a structured review, then challenge findings or answer its questions here. Switch back to editing whenever you want to change the draft.'
+                : 'This is a persistent Claude/Codex session with file tools and buffer history. Ask it to edit, explain, compare, restore, or undo.'}
           />
         ) : null}
         {busy && liveReasoning ? (
@@ -469,11 +571,12 @@ export function EditorChat({
 
       <div className="shrink-0 border-t border-[var(--color-border)] p-3">
         <textarea
+          ref={messageRef}
           value={message}
           onChange={(event) => {
             const draft = event.target.value
             setMessage(draft)
-            storeEditorChat(storageKey, { sessionId: sessionRef.current, turns, draft })
+            storeEditorChat(storageKey, { sessionId: sessionRef.current, turns, draft, reviewMode: resumeReviewMode })
           }}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -481,20 +584,20 @@ export function EditorChat({
               void send()
             }
           }}
-          placeholder={reviewOnly ? 'What should we clarify before I apply?' : tailoringSkill ? 'Try “Tailor my resume for this role”…' : tailoring ? 'Ask for another edit, explanation, or undo…' : 'Ask the Claude/Codex editor agent…'}
+          placeholder={resumeReviewMode ? 'Question a finding or add context…' : reviewOnly ? 'What should we clarify before I apply?' : tailoringSkill ? 'Try “Tailor my resume for this role”…' : tailoring ? 'Ask for another edit, explanation, or undo…' : 'Ask the Claude/Codex editor agent…'}
           aria-label="Message CV editor agent"
-          disabled={!hydrated || busy || api.reviewPending || editingIndex !== null}
+          disabled={!hydrated || busy || api.reviewPending || editingIndex !== null || (resumeReviewMode && (staleResumeReview || !latestResumeReview))}
           maxLength={8000}
           rows={3}
           className="w-full resize-none rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm leading-relaxed outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)] disabled:opacity-60"
         />
         <div className="mt-2 flex items-center justify-between gap-2">
           <span className="text-[10px] text-[var(--color-faint)]">
-            {editingIndex !== null ? 'Editing a previous message — save to rerun from there' : api.reviewPending ? 'Accept or reject the current proposal before sending another edit' : reviewOnly ? 'Confirmed corrections are saved to this application’s analysis' : 'AI edits are previewed before they can be saved'}
+            {editingIndex !== null ? 'Editing a previous message — save to rerun from there' : api.reviewPending ? 'Accept or reject the current proposal before sending another edit' : resumeReviewMode ? 'Your feedback updates the review, not the resume' : reviewOnly ? 'Confirmed corrections are saved to this application’s analysis' : 'AI edits are previewed before they can be saved'}
           </span>
           <button
             onClick={() => busy ? stop() : void send()}
-            disabled={!hydrated || editingIndex !== null || (!busy && (api.reviewPending || !message.trim()))}
+            disabled={!hydrated || editingIndex !== null || (!busy && (api.reviewPending || (resumeReviewMode && (staleResumeReview || !latestResumeReview)) || !message.trim()))}
             className={cn(
               'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium disabled:opacity-40',
               busy ? 'border border-[var(--color-bad)] text-[var(--color-bad)]' : 'bg-[var(--color-accent)] text-[var(--color-bg)]',
@@ -554,6 +657,16 @@ function storeEditorChat(storageKey: string, snapshot: EditorChatSnapshot) {
 
 function readEditorChat(storageKey: string): string | null {
   try { return window.localStorage.getItem(storageKey) } catch { return null }
+}
+
+function formatResumeReviewForConversation(reply: string, review: Review): string {
+  return [
+    reply,
+    `Assessment: ${review.assessment}`,
+    ...review.strengths.map((strength) => `Strength: ${strength}`),
+    ...review.findings.map((finding) => `Finding in ${finding.location}: ${finding.issue} Recommendation: ${finding.recommendation}${finding.excerpt ? ` Excerpt: ${finding.excerpt}` : ''}${finding.suggestedWording ? ` Suggested wording: ${finding.suggestedWording}` : ''}`),
+    ...review.questions.map((question) => `Question: ${question}`),
+  ].join('\n')
 }
 
 function ReasoningSummary({ text }: { text: string }) {

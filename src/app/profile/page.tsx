@@ -6,7 +6,7 @@ import { sourceById } from './sources'
 
 export const dynamic = 'force-dynamic'
 
-/** The profile is the editable master resume in English and French. */
+/** The profile exposes editable general and master resumes in both languages. */
 export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ src?: string }> }) {
   const { src } = await searchParams
   const source = sourceById(src)

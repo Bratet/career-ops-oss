@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import type { SkillSummary } from '@/lib/skills/types'
 import { FeatureEnginePicker } from '@/components/FeatureEnginePicker'
 import { GeneralApplicationForm } from '@/components/GeneralApplicationForm'
+import { ArrowLeft, ArrowRight, ClipboardList, FileText, Link2 } from 'lucide-react'
 
 type Step = 'paste' | 'analyzing' | 'review' | 'creating'
 
@@ -56,20 +57,19 @@ export function NewApplicationFlow() {
       }
 
       let completed: JdAnalysis | null = null
-      let completedRun: string | null = null
       let failed = false
       // One event per line, so progress shows while the model works.
       await readNdjson(r, (e) => {
         if (e.type === 'start') {
           setProgress((p) => [...p, `engine: ${e.engine} · ${e.skillId} v${e.skillVersion}`])
-          if (typeof e.runId === 'string') { setRunId(e.runId); completedRun = e.runId }
+          if (typeof e.runId === 'string') setRunId(e.runId)
         }
         if (e.type === 'progress') setProgress((p) => [...p, e.message as string])
         if (e.type === 'error') { failed = true; setError(e.message as string); setStep('paste') }
         if (e.type === 'done') { completed = e.analysis as JdAnalysis; setAnalysis(completed) }
       })
       if (!failed && !completed) throw new Error('Analysis ended without a result. Please retry.')
-      if (!failed && completed) await create(completed, completedRun)
+      if (!failed && completed) setStep('review')
     } catch (e) {
       setError((e as Error).message)
       setStep('paste')
@@ -97,13 +97,22 @@ export function NewApplicationFlow() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold tracking-tight">New application</h1>
-        <p className="text-xs text-[var(--color-faint)]">
-          {noJd ? 'Add the company details and start from your general resume.' : 'Analyze the posting, then discuss eligibility and gaps with the AI. Tailor your resume when you’re ready.'}
+    <div className="mx-auto max-w-5xl space-y-7 pb-12">
+      <div className="border-b border-[var(--color-border)] pb-6">
+        <Link href="/applications" className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--color-muted)] hover:text-[var(--color-accent)]"><ArrowLeft className="size-3.5" /> Applications</Link>
+        <h1 className="mt-4 text-3xl font-semibold tracking-tight">New application</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--color-muted)]">
+          {noJd ? 'Start with your general resume and add the opportunity details you know.' : 'Add a job posting, review what the AI finds, then create a workspace for this opportunity.'}
         </p>
       </div>
+
+      {!noJd ? <ol className="grid grid-cols-3 gap-2 text-center text-[11px] font-medium text-[var(--color-muted)] sm:flex sm:items-center sm:text-xs" aria-label="Application setup progress">
+        <li aria-current={step === 'paste' || step === 'analyzing' ? 'step' : undefined} className={`rounded-lg px-2 py-2 sm:rounded-full sm:px-3 sm:py-1.5 ${step === 'paste' || step === 'analyzing' ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]' : 'bg-[var(--color-surface-2)]'}`}>1. Add posting</li>
+        <ArrowRight className="hidden size-3.5 sm:block" aria-hidden="true" />
+        <li aria-current={step === 'review' ? 'step' : undefined} className={`rounded-lg px-2 py-2 sm:rounded-full sm:px-3 sm:py-1.5 ${step === 'review' ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]' : 'bg-[var(--color-surface-2)]'}`}>2. Review analysis</li>
+        <ArrowRight className="hidden size-3.5 sm:block" aria-hidden="true" />
+        <li className={`rounded-lg px-2 py-2 sm:rounded-full sm:px-3 sm:py-1.5 ${step === 'creating' ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]' : 'bg-[var(--color-surface-2)]'}`}>3. Create workspace</li>
+      </ol> : null}
 
       {step === 'creating' ? <p role="status" className="text-sm text-[var(--color-muted)]">{progress.at(-1) ?? 'Opening your analysis…'}</p> : null}
       {createdKey && error ? <Link href={`/applications/${createdKey}?tab=overview`} className="text-sm text-[var(--color-accent)] underline">Open the analysis workspace</Link> : null}
@@ -113,39 +122,56 @@ export function NewApplicationFlow() {
         </Card>
       ) : null}
 
-      {step === 'paste' ? <div className="flex gap-2">
-        <button disabled={manualBusy} aria-pressed={!noJd} onClick={() => setNoJd(false)} className="rounded-md border border-[var(--color-border)] px-3 py-2 text-xs aria-pressed:bg-[var(--color-surface-2)]">I have a job description</button>
-        <button disabled={manualBusy} aria-pressed={noJd} onClick={() => setNoJd(true)} className="rounded-md border border-[var(--color-border)] px-3 py-2 text-xs aria-pressed:bg-[var(--color-surface-2)]">No job description</button>
+      {step === 'paste' ? <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Application starting point">
+        <button type="button" disabled={manualBusy} aria-pressed={!noJd} onClick={() => setNoJd(false)} className="flex items-start gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left transition-colors hover:border-[var(--color-border-strong)] aria-pressed:border-[var(--color-accent)] aria-pressed:bg-[var(--color-accent-soft)]">
+          <ClipboardList className="mt-0.5 size-5 shrink-0 text-[var(--color-accent)]" aria-hidden="true" />
+          <span><span className="block text-sm font-semibold">I have a job description</span><span className="mt-1 block text-xs leading-relaxed text-[var(--color-muted)]">Analyze requirements and prepare a tailored application.</span></span>
+        </button>
+        <button type="button" disabled={manualBusy} aria-pressed={noJd} onClick={() => setNoJd(true)} className="flex items-start gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left transition-colors hover:border-[var(--color-border-strong)] aria-pressed:border-[var(--color-accent)] aria-pressed:bg-[var(--color-accent-soft)]">
+          <FileText className="mt-0.5 size-5 shrink-0 text-[var(--color-accent)]" aria-hidden="true" />
+          <span><span className="block text-sm font-semibold">No job description</span><span className="mt-1 block text-xs leading-relaxed text-[var(--color-muted)]">Track the opportunity using a copy of your general resume.</span></span>
+        </button>
       </div> : null}
       {noJd ? <Card><GeneralApplicationForm onBusy={setManualBusy} /></Card> : null}
 
       {!noJd && (step === 'paste' || step === 'analyzing') ? (
         <Card>
-          <CardHeader title="Job posting" hint="Paste it verbatim. The source URL is stored on line 1 of jd.md." />
-          <div className="space-y-3 p-4">
-            <input
+          <CardHeader title="Job posting" hint="Paste the full text so the analysis can read the requirements in context." />
+          <div className="space-y-5 p-5">
+            <label className="block text-xs font-medium text-[var(--color-muted)]">Posting URL <span className="font-normal">(optional)</span>
+              <span className="mt-1.5 flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 focus-within:outline-2 focus-within:outline-[var(--color-accent)]"><Link2 className="size-4 text-[var(--color-faint)]" aria-hidden="true" /><input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://… (source URL, optional but recommended)"
-              className="h-8 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 text-[13px] outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)]"
-            />
+              type="url"
+              placeholder="https://company.example/jobs/role"
+              className="h-10 w-full bg-transparent text-sm text-[var(--color-text)] outline-none placeholder:text-[var(--color-faint)]"
+            /></span></label>
+            <label className="block text-xs font-medium text-[var(--color-muted)]">Job description
             <textarea
               value={jd}
               onChange={(e) => setJd(e.target.value)}
               placeholder="Paste the full job description here…"
-              rows={16}
+              rows={14}
               disabled={step === 'analyzing'}
-              className="w-full resize-y rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-3 font-mono text-xs leading-relaxed outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)] disabled:opacity-60"
-            />
-            <div className="flex items-center gap-3">
+              className="mt-1.5 w-full resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4 text-sm leading-relaxed text-[var(--color-text)] outline-none placeholder:text-[var(--color-faint)] focus:border-[var(--color-accent)] disabled:opacity-60"
+            /></label>
+            <div className="flex flex-wrap items-center gap-3 border-t border-[var(--color-border)] pt-4">
               <button
+                type="button"
                 onClick={analyze}
                 disabled={jd.trim().length < 40 || step === 'analyzing'}
-                className="flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-[var(--color-bg)] hover:opacity-90 disabled:opacity-40"
+                className="flex min-h-10 items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-40"
               >
                 {step === 'analyzing' ? <Spinner className="border-t-[var(--color-bg)]" /> : null}
                 {step === 'analyzing' ? 'Analyzing…' : 'Analyze job'}
               </button>
+              <span className="text-xs text-[var(--color-faint)] tnum">{jd.trim().length.toLocaleString()} characters</span>
+              {progress.length ? <span role="status" className="min-w-0 flex-1 truncate text-xs text-[var(--color-muted)]">{progress.at(-1)}</span> : null}
+            </div>
+            {jd.trim().length > 0 && jd.trim().length < 40 ? <p className="text-xs text-[var(--color-warn)]">Add at least 40 characters from the posting to analyze it.</p> : null}
+            <details className="rounded-lg bg-[var(--color-surface-2)] p-3 text-xs">
+              <summary className="cursor-pointer font-medium text-[var(--color-muted)]">Analysis options</summary>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
               <FeatureEnginePicker feature="job-analysis" disabled={step === 'analyzing'} />
               <select
                 value={skillId}
@@ -159,11 +185,9 @@ export function NewApplicationFlow() {
                 )) : <option value="analyze-job">Analyze job posting</option>}
               </select>
               <Link href={`/skills/${skillId}`} className="text-xs text-[var(--color-accent)] hover:underline">Edit skill</Link>
-              <span className="text-xs text-[var(--color-faint)] tnum">{jd.length.toLocaleString()} chars</span>
-              {progress.length ? (
-                <span className="truncate text-xs text-[var(--color-faint)]">{progress[progress.length - 1]}</span>
-              ) : null}
-            </div>
+              <Link href="/settings" className="text-xs text-[var(--color-accent)] hover:underline">All AI settings</Link>
+              </div>
+            </details>
             {step === 'analyzing' ? (
               <p className="text-[11px] text-[var(--color-faint)]">
                 This runs your local CLI against your subscription, so it can take up to a minute.
@@ -257,7 +281,7 @@ export function NewApplicationFlow() {
                   'flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-[var(--color-bg)] hover:opacity-90',
                 )}
               >
-                Retry preparation
+                {error ? 'Retry creating application' : 'Create application'}
               </button>
             </div>
           </Card>

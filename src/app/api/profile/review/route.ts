@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getEngine } from '@/lib/engine'
 import { getSkillForRunner } from '@/lib/skills/registry'
 import { startSkillRun, type RunRecorder } from '@/lib/skills/runs'
-import { resumeReviewParser, resumeReviewPrompt, resumeReviewSchema, reviewRequestParser } from '@/lib/resumeReview'
+import { resumeReviewParser, resumeReviewPrompt, resumeReviewReplyParser, resumeReviewReplySchema, resumeReviewSchema, reviewRequestParser } from '@/lib/resumeReview'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -16,15 +16,18 @@ export async function POST(req: Request) {
     const [engine, skill] = await Promise.all([getEngine('editor-chat'), getSkillForRunner('review-resume', 'text-artifact')])
     run = await startSkillRun({
       feature: 'review-resume', skill, engine: engine.id,
-      inputSummary: { source: input.data.source, characters: input.data.yaml.length, renderedPdf: false },
+      inputSummary: { source: input.data.source, characters: input.data.yaml.length, renderedPdf: false, followUp: Boolean(input.data.message) },
     })
-    run.event('start', 'Reviewing the current resume draft')
+    run.event('start', input.data.message ? 'Reconsidering resume review feedback' : 'Reviewing the current resume draft')
     const raw = await engine.runStructured<unknown>({
-      prompt: resumeReviewPrompt(skill.instructions, input.data), schema: resumeReviewSchema, signal: req.signal,
+      prompt: resumeReviewPrompt(skill.instructions, input.data),
+      schema: input.data.message ? resumeReviewReplySchema : resumeReviewSchema,
+      signal: req.signal,
     })
-    const review = resumeReviewParser.parse(raw)
+    const response = input.data.message ? resumeReviewReplyParser.parse(raw) : { reply: '', review: resumeReviewParser.parse(raw) }
+    const { review, reply } = response
     await run.complete({ findings: review.findings.length, questions: review.questions.length })
-    return NextResponse.json({ review, runId: run.id, skillVersion: skill.metadata.version, engine: engine.id })
+    return NextResponse.json({ review, reply, runId: run.id, skillVersion: skill.metadata.version, engine: engine.id })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Resume review failed.'
     await run?.fail(message).catch(() => {})

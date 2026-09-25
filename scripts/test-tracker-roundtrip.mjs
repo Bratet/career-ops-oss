@@ -14,8 +14,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const path = join(root, 'workspace', 'state', 'applications.md')
 const text = readFileSync(path, 'utf-8')
 
-const trailingNewline = text.endsWith('\n')
-const lines = text.split('\n')
+// Git can check this tracked Markdown file out with CRLF on Windows.
+const lineEnding = text.includes('\r\n') ? '\r\n' : '\n'
+const trailingNewline = text.endsWith(lineEnding)
+const lines = text.split(lineEnding)
 if (trailingNewline) lines.pop()
 
 const headerIdx = lines.findIndex((l) => /^\|\s*#\s*\|/.test(l))
@@ -34,12 +36,12 @@ for (const line of lines.slice(headerIdx + 2)) {
 }
 
 const rebuilt =
-  [...preamble, header, separator, ...rows.map((c) => `| ${c.join(' | ')} |`)].join('\n') +
-  (trailingNewline ? '\n' : '')
+  [...preamble, header, separator, ...rows.map((c) => `| ${c.join(' | ')} |`)].join(lineEnding) +
+  (trailingNewline ? lineEnding : '')
 
 if (rebuilt !== text) {
-  const a = text.split('\n')
-  const b = rebuilt.split('\n')
+  const a = text.split(lineEnding)
+  const b = rebuilt.split(lineEnding)
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
     if (a[i] !== b[i]) {
       console.error(`❌ round-trip differs at line ${i + 1}`)
