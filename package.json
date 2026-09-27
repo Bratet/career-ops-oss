@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:weeks": "tsx scripts/test-weeks.ts",
     "test:saved-searches": "tsx scripts/test-saved-searches.ts",
     "test:resume-review": "tsx scripts/test-resume-review.ts",
     "test:general-application": "tsx scripts/test-general-application.ts",

@@ -17,11 +17,10 @@ export interface WeekBucket {
 
 /**
  * Applications bucketed by week, with empty weeks filled in so the gaps are
- * visible rather than silently compressed away.
+ * visible rather than silently compressed away. Always includes the current week,
+ * even when no applications have been recorded.
  */
 export function byWeek(rows: TrackerRow[], today = new Date()): WeekBucket[] {
-  if (rows.length === 0) return []
-
   const counts = new Map<string, number>()
   for (const r of rows) {
     if (!r.date) continue
@@ -33,7 +32,8 @@ export function byWeek(rows: TrackerRow[], today = new Date()): WeekBucket[] {
   const current = weekStart(today.toISOString().slice(0, 10))
   const out: WeekBucket[] = []
 
-  const cursor = new Date(`${keys[0]}T00:00:00Z`)
+  const first = keys[0] && keys[0] < current ? keys[0] : current
+  const cursor = new Date(`${first}T00:00:00Z`)
   const end = new Date(`${current}T00:00:00Z`)
 
   while (cursor <= end) {
