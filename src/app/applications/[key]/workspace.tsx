@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Lock } from 'lucide-react'
 import type { ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import type { Application } from '@/lib/applications'
 import type { JdAnalysis } from '@/lib/tailoring/jd'
@@ -23,8 +23,11 @@ import { applicationChatScope, editorChatStorageKey, parseEditorChatSnapshot, ty
 
 import type { EligibilityIssue } from '@/lib/eligibility'
 import { Overview } from './overview'
+import { NextStepsPanel, type NextStep } from './next-steps-panel'
 
-type Tab = 'overview' | 'resume'
+type Tab = 'overview' | 'resume' | 'next'
+
+const NEXT_STEPS: readonly NextStep[] = ['status', 'cover-letter', 'email', 'linkedin']
 type SaveState = 'saved' | 'saving' | 'error'
 
 /** Background jobs (fit analysis, a concurrent tailoring run) bump the workspace revision on the server before this tab's own request resolves. */
@@ -39,8 +42,11 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
   analysis: JdAnalysis | null
 }) {
   const router = useRouter()
-  const requested = useSearchParams().get('tab')
-  const [tab, setTab] = useState<Tab>(requested === 'resume' ? 'resume' : 'overview')
+  const params = useSearchParams()
+  const requested = params.get('tab')
+  const requestedStep = params.get('step')
+  const [tab, setTab] = useState<Tab>(requested === 'resume' || requested === 'next' ? requested : 'overview')
+  const [nextStep, setNextStep] = useState<NextStep | null>(NEXT_STEPS.includes(requestedStep as NextStep) ? requestedStep as NextStep : null)
   const [workspace, setWorkspace] = useState(initialWorkspace)
   const [draft, setDraft] = useState(initialWorkspace.draftYaml)
   const [saveState, setSaveState] = useState<SaveState>('saved')
@@ -59,6 +65,20 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
   const editorCardRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { revision.current = workspace.revision }, [workspace.revision])
+
+  // Mirror the current step in the URL so reloads and shared links land in the same place.
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (tab === 'overview') url.searchParams.delete('tab'); else url.searchParams.set('tab', tab)
+    if (tab === 'next' && nextStep) url.searchParams.set('step', nextStep); else url.searchParams.delete('step')
+    if (url.href !== window.location.href) window.history.replaceState(window.history.state, '', url)
+  }, [tab, nextStep])
+
+  function goTo(next: Tab) {
+    setTab(next)
+    if (next !== 'next') setNextStep(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   /** Refetch the workspace to pick up a revision this tab did not know had already moved on. */
   async function refreshWorkspaceRevision(): Promise<ApplicationWorkspace> {
@@ -310,7 +330,7 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
       })
       savedDraft.current = saved.draftYaml
       setDraft(saved.draftYaml); setWorkspace(saved); revision.current = saved.revision
-      if (action === 'accept') router.push(`/applications/${encodeURIComponent(app.key)}/next-steps`)
+      if (action === 'accept') goTo('next')
       router.refresh()
     } catch (reason) { setError((reason as Error).message) } finally { setBusy(false) }
   }
@@ -328,7 +348,7 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
         return data.workspace as ApplicationWorkspace
       })
       setWorkspace(result); revision.current = result.revision
-      router.push(`/applications/${encodeURIComponent(app.key)}/next-steps`)
+      goTo('next')
       router.refresh()
     } catch (reason) { setError((reason as Error).message) } finally { setBusy(false) }
   }
@@ -396,13 +416,27 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
     fill: preview.fill,
   }
 
+  const finalized = !!app.folder?.has.pdf
+  const steps: { value: Tab; label: string; short: string; description: string; locked?: boolean }[] = [
+    { value: 'overview', label: workspace.general ? 'Review context' : 'Analyze & discuss', short: workspace.general ? 'context' : 'analysis', description: workspace.general ? 'Review the application details with AI' : 'Compare the job with your profile and clarify issues' },
+    { value: 'resume', label: 'Resume & AI', short: 'Resume & AI', description: workspace.general ? 'Edit, review, and finalize your resume' : 'Use your analysis to tailor and finalize your resume' },
+    { value: 'next', label: 'Apply & follow up', short: 'next steps', description: finalized ? 'Track your application and prepare messages' : 'Unlocks once your resume is finalized', locked: !finalized },
+  ]
+  const current = steps.findIndex((step) => step.value === tab)
+  const previous = steps[current - 1]
+  const following = steps[current + 1]
+  const hint = tab === 'overview'
+    ? 'Work through the details with AI below. When you’re ready, continue to your resume. You can return here anytime.'
+    : tab === 'resume'
+      ? finalized ? 'Your resume is finalized. Keep refining it and finalize again, or continue to your next steps.' : workspace.general ? 'Review changes with AI, then finalize your resume to unlock next steps.' : 'Build on your fit analysis and clarifications, then finalize your resume to unlock next steps.'
+      : 'Pick one task at a time. Your drafts and notes are saved with this application.'
+
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0"><Link href="/applications" className="text-xs text-[var(--color-faint)] hover:text-[var(--color-accent)]">← Applications</Link><h1 className="mt-1 truncate text-lg font-semibold">{app.row?.company ?? app.folder?.slug ?? 'Application'}</h1><p className="truncate text-xs text-[var(--color-muted)]">{app.row?.role ?? 'No tracker row linked'}</p></div>
         <div className="flex flex-wrap items-center gap-2">
           {app.row ? <Badge tone={statusTone(status)}>{status}</Badge> : null}
-          {app.folder?.has.pdf ? <Link href={`/applications/${encodeURIComponent(app.key)}/next-steps`} className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-accent)] hover:bg-[var(--color-surface-2)]">Next steps</Link> : null}
           {app.row && status !== 'Applied' ? <button disabled={busy} onClick={() => void patchStatus('Applied')} className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-bg)] disabled:opacity-40">Mark as Applied</button> : null}
           {app.row ? <select value={status} disabled={busy} onChange={(event) => void patchStatus(event.target.value)} className="h-8 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs">{STATUSES.map((value) => <option key={value}>{value}</option>)}{!STATUSES.includes(status as never) && status ? <option>{status}</option> : null}</select> : null}
           {app.folder ? <Link href={`/runs?applicationKey=${encodeURIComponent(app.key)}`} className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">AI runs</Link> : null}
@@ -411,33 +445,35 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
       {error ? <Card className="border-[var(--color-bad-soft)]"><p className="px-4 py-2 text-xs text-[var(--color-bad)]">{error}</p></Card> : null}
       <nav aria-label="Application workflow">
         <ol className="application-flow">
-          {([
-            ['overview', workspace.general ? 'Review context' : 'Analyze & discuss', workspace.general ? 'Review the application details with AI' : 'Compare the job with your profile and clarify issues'],
-            ['resume', 'Resume & AI', workspace.general ? 'Edit, review, and finalize your resume' : 'Use your analysis to tailor and finalize your resume'],
-          ] as const).map(([value, label, description], index) => (
+          {steps.map(({ value, label, description, locked }, index) => (
             <li key={value}>
-              <button type="button" onClick={() => setTab(value)} aria-current={tab === value ? 'step' : undefined} className="application-flow-step">
-                <span className="application-flow-number" aria-hidden="true">{index + 1}</span>
+              <button type="button" onClick={() => goTo(value)} aria-current={tab === value ? 'step' : undefined} className="application-flow-step">
+                <span className="application-flow-number" aria-hidden="true">{locked ? <Lock size={16} /> : index + 1}</span>
                 <span className="min-w-0"><span className="block text-sm font-semibold">{label}</span><span className="mt-1 block text-xs leading-relaxed text-[var(--color-muted)]">{description}</span></span>
               </button>
             </li>
           ))}
         </ol>
       </nav>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-2xl text-xs leading-relaxed text-[var(--color-muted)]">
-          {tab === 'overview'
-            ? 'Work through the details with AI below. When you’re ready, continue to your resume. You can return here anytime.'
-            : workspace.general ? 'Review changes with AI, then finalize your resume.' : 'Build on your fit analysis and clarifications. Return to analysis whenever you need to revise them.'}
-        </p>
-        <button type="button" onClick={() => setTab(tab === 'overview' ? 'resume' : 'overview')} className={cn('inline-flex min-h-10 items-center gap-2 rounded-md px-4 py-2 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-accent)]', tab === 'overview' ? 'bg-[var(--color-accent)] text-[var(--color-bg)] hover:opacity-90' : 'border border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-surface-2)]')}>
-          {tab === 'resume' ? <ArrowLeft size={16} aria-hidden="true" /> : null}
-          {tab === 'overview' ? 'Continue to Resume & AI' : workspace.general ? 'Back to context' : 'Back to analysis'}
-          {tab === 'overview' ? <ArrowRight size={16} aria-hidden="true" /> : null}
-        </button>
+      <div className="flex flex-wrap items-center gap-3">
+        {previous ? <button type="button" onClick={() => goTo(previous.value)} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[var(--color-border)] px-4 py-2 text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-surface-2)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-accent)]"><ArrowLeft size={16} aria-hidden="true" /> Back to {previous.short}</button> : null}
+        <p className="min-w-48 max-w-2xl flex-1 text-xs leading-relaxed text-[var(--color-muted)]">{hint}</p>
+        {following && !(following.locked && tab === 'resume') ? <button type="button" onClick={() => goTo(following.value)} className="ml-auto inline-flex min-h-10 items-center gap-2 rounded-md bg-[var(--color-accent)] px-4 py-2 text-xs font-semibold text-[var(--color-bg)] hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-accent)]">Continue to {following.short} <ArrowRight size={16} aria-hidden="true" /></button> : null}
       </div>
 
-      <div className="space-y-3">
+      {tab === 'next' ? <NextStepsPanel
+        app={app}
+        status={status}
+        onStatusSaved={(next) => { setStatus(next); router.refresh() }}
+        initialDrafts={workspace.outreach ?? {}}
+        step={nextStep}
+        onStep={(step) => { setNextStep(step); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+        onGoToResume={() => goTo('resume')}
+        onLocatePdf={(reveal) => void locatePdf(reveal)}
+      /> : null}
+      {tab === 'next' && located ? <p role="status" className="text-xs text-[var(--color-accent)]">{located}</p> : null}
+
+      <div className={cn('space-y-3', tab === 'next' && 'hidden')}>
         {tab === 'resume' ? <>
         <div className="flex flex-wrap items-center gap-2"><span className={`text-xs ${saveState === 'error' ? 'text-[var(--color-bad)]' : 'text-[var(--color-faint)]'}`}>{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : 'Autosave error'}</span>{rendering ? <span className="flex items-center gap-1 text-xs text-[var(--color-faint)]"><Spinner /> Rendering…</span> : preview.pages ? <Badge tone={preview.pages === 1 && !preview.failures.length ? 'ok' : 'warn'}>{preview.pages} page · {preview.fill ?? '—'}% fill</Badge> : null}{reviewPending ? <Badge tone="warn">Review AI changes</Badge> : null}{located ? <span className="text-xs text-[var(--color-accent)]">{located}</span> : null}<div className="ml-auto flex items-center gap-2">{app.folder?.has.pdf ? <><a href={`/api/applications/${encodeURIComponent(app.key)}/file/${encodeURIComponent(app.folder.docs.find((doc) => doc.key === 'pdf')?.name ?? 'resume.pdf')}`} target="_blank" rel="noreferrer" className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">Open PDF</a><button onClick={() => void locatePdf(true)} className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">Reveal in Finder</button><button onClick={() => void locatePdf(false)} className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">Copy path</button></> : null}<button disabled={busy || reviewPending || saveState !== 'saved'} onClick={() => void finalize()} className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-[var(--color-bg)] disabled:opacity-40">Finalize resume</button></div></div>
         {preview.failures.length ? <Card className="border-[var(--color-bad-soft)]"><ul className="list-disc px-8 py-2 text-xs text-[var(--color-bad)]">{preview.failures.map((failure, index) => <li key={index}>{failure.why}</li>)}</ul></Card> : null}

@@ -1,14 +1,7 @@
-import { notFound } from 'next/navigation'
-import { getApplication } from '@/lib/applications'
-import { readWorkspace } from '@/lib/workspaces'
-import { NextSteps } from './next-steps'
+import { redirect } from 'next/navigation'
 
-export const dynamic = 'force-dynamic'
-
+/** Next steps are now step 3 of the application workspace; keep old links working. */
 export default async function NextStepsPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params
-  const app = await getApplication(key)
-  if (!app) notFound()
-  const workspace = await readWorkspace(key)
-  return <NextSteps app={app} initialDrafts={workspace.outreach ?? {}} />
+  redirect(`/applications/${encodeURIComponent(key)}?tab=next`)
 }
