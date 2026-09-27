@@ -6,6 +6,7 @@ import {
   serializeEditorChatSnapshot,
 } from '../src/lib/chatPersistence'
 import { chatSkillForMessage } from '../src/lib/chatSkills'
+import { profileFitPrompt } from '../src/lib/profileFit'
 
 let failures = 0
 function check(name: string, condition: boolean, detail = '') {
@@ -34,6 +35,20 @@ for (const turn of [0, 1]) {
   check(`candidate guidance reaches turn ${turn}`, guided.includes(guidance))
   check(`guidance does not replace the request on turn ${turn}`, guided.endsWith('Keep the current summary.'))
 }
+
+const analysis = editorAgentPrompt('Yes, I used MLflow.', 'tailored', 0, guidance, '.', true)
+check('analysis chat records durable confirmations in guidance', analysis.includes('record it in') && analysis.includes('candidate-guidance.md'))
+check('analysis chat does not re-ask settled guidance', analysis.includes('do not ask the user to confirm it again'))
+check('analysis chat still gates master edits', analysis.includes('Master resume updates still require an explicit request'))
+check('tailoring chat does not get the guidance-recording rule', !editorAgentPrompt('Shorten it.', 'tailored', 0, guidance).includes('Implicit practice is not a gap'))
+
+const fitAnalysis = { requirements: [{ text: 'Clean data', weight: 'must', rank: 1 }] } as unknown as Parameters<typeof profileFitPrompt>[1]
+const fitTemplate = 'JD {{JD_ANALYSIS}} CV {{MASTER_RESUME}}'
+const confirmed = '- Standard practice: cleaning and validating data.'
+const fitPrompt = profileFitPrompt(fitTemplate, fitAnalysis, 'cv: {}', confirmed)
+check('fit analysis sees confirmed guidance', fitPrompt.includes(confirmed) && fitPrompt.includes('User-confirmed:'))
+check('fit analysis keeps the not-confirmed boundary', fitPrompt.includes('not confirmed stays unconfirmed'))
+check('fit analysis without guidance is unchanged', profileFitPrompt(fitTemplate, fitAnalysis, 'cv: {}') === profileFitPrompt(fitTemplate, fitAnalysis, 'cv: {}', '  '))
 
 const sessionId = '123e4567-e89b-42d3-a456-426614174000'
 const snapshot = parseEditorChatSnapshot(serializeEditorChatSnapshot({

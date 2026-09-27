@@ -55,6 +55,7 @@ test: node_modules ## Tracker and tailoring tests
 	@npm run test:application-delete
 	@npm run test:workspaces
 	@npm run test:application-flow
+	@npm run test:outreach
 
 reconcile: node_modules ## Rebuild workspace/state/app-index.json from folder names
 	@npm run reconcile

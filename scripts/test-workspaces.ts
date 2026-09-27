@@ -97,6 +97,51 @@ try {
   assert.equal((await workspaces.readWorkspace(key)).revision, updated.revision)
   console.log('Analysis chat: persisted corrections, recalculated coverage, concurrent drafts, stale reports, invalid input and untouched tracker pass')
 
+  // Incremental refresh: a chat save records the inputs it reflects, so the
+  // report stays ready; later input changes queue a refresh without losing it.
+  const saved2 = await workspaces.readWorkspace(key)
+  assert.equal(saved2.fit.status, 'ready')
+  assert.equal(saved2.fit.basis?.master, 'cv:\n  name: Test\n')
+  await writeFile(PATHS.candidateGuidance, '- Standard practice: Kubernetes on every project.\n')
+  const queued = await workspaces.readWorkspace(key)
+  assert.equal(queued.fit.status, 'queued', 'a guidance change queues a refresh')
+  assert.deepEqual(queued.fit.report, saved2.fit.report, 'the queued refresh keeps the report on screen')
+  const chatWhileQueued = structuredClone(queued.fit.report!)
+  chatWhileQueued.recommendedEmphasis = ['Kubernetes delivery']
+  assert.equal(await saveAnalysisChatReport(key, queued, chatWhileQueued), true, 'the chat can save while a refresh is queued')
+  const afterChat = await workspaces.readWorkspace(key)
+  assert.equal(afterChat.fit.status, 'ready', 'the chat save makes the refresh unnecessary')
+  assert.equal(afterChat.fit.basis?.guidance, '- Standard practice: Kubernetes on every project.\n')
+
+  const legacy = await workspaces.updateWorkspace(key, afterChat.revision, (current) => ({ ...current, fit: { ...current.fit, guidanceHash: undefined } }))
+  await writeFile(PATHS.candidateGuidance, '- Something new.\n')
+  assert.equal((await workspaces.readWorkspace(key)).fit.status, 'ready', 'older records do not all re-run at once')
+  assert.equal(legacy.fit.status, 'ready')
+
+  const changes = fit.fitInputChanges(
+    { master: 'cv:\n  a: 1\n  b: 2\n', guidance: '- one\n' },
+    { master: 'cv:\n  a: 1\n  c: 3\n', guidance: '- one\n' },
+  )
+  assert.deepEqual(changes.master, { removed: ['b: 2'], added: ['c: 3'] })
+  assert.equal(fit.hasFitInputChanges(changes), true)
+  assert.equal(fit.hasFitInputChanges(fit.fitInputChanges({ master: 'x', guidance: '' }, { master: 'x\n\n', guidance: '' })), false)
+  assert.equal(fit.sameRequirements(corrected as never, analysis as never), true)
+  assert.equal(fit.sameRequirements({ ...corrected, requirements: corrected.requirements.slice(1) } as never, analysis as never), false)
+
+  const refresh = fit.profileFitRefreshPrompt('JD {{JD_ANALYSIS}} CV {{MASTER_RESUME}}', analysis as never, 'cv: {}', '- g', updated.fit.report!, changes)
+  assert.match(refresh, /incremental update, not a fresh assessment/)
+  assert.match(refresh, /PREVIOUS_ASSESSMENT/)
+  assert.match(refresh, /"c: 3"/)
+
+  const confirmedReport = updated.fit.report!
+  const downgraded = structuredClone(confirmedReport)
+  downgraded.requirements[1] = { ...downgraded.requirements[1], classification: 'gap', evidence: [] }
+  const kept = fit.keepConfirmedRows(downgraded, confirmedReport, false)
+  assert.equal(kept.requirements[1].classification, 'direct', 'a refresh cannot drop a user-confirmed row')
+  assert.equal(kept.verdict, 'Strong')
+  assert.equal(fit.keepConfirmedRows(downgraded, confirmedReport, true).requirements[1].classification, 'gap', 'removing the confirmation from guidance can')
+  console.log('Incremental fit: guidance-triggered refresh, chat saves while queued, legacy records, line diff, refresh prompt, confirmed rows pass')
+
   console.log('workspaces: atomic persistence, conflicts, unsafe keys, and deterministic fit pass')
 } finally {
   process.chdir(originalCwd)

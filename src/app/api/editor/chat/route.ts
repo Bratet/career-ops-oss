@@ -45,7 +45,7 @@ export async function POST(req: Request) {
           applicationContext: context,
           conversation: parseConversation(body.conversation),
           reviewOnly: body.reviewOnly === true,
-          fitReport: analysisWorkspace?.fit.status === 'ready' ? analysisWorkspace.fit.report : null,
+          fitReport: analysisWorkspace?.fit.report ?? null,
           signal: req.signal,
           onEvent: (event) => {
             if (event.type === 'activity' || body.stream === true) send({ ...event })

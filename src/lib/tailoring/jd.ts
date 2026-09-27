@@ -36,7 +36,7 @@ export const jdAnalysisSchema = {
     },
     requirements: {
       type: 'array',
-      description: 'Every stated requirement, split into atomic items and ranked within its must/nice group.',
+      description: 'Every stated requirement, grouped into distinct screenable capabilities (typically 15 to 30) and ranked within its must/nice group.',
       items: {
         type: 'object',
         additionalProperties: false,

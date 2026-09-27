@@ -54,7 +54,7 @@ export function Overview({ analysis, workspace, onRetry, onOpenChat, eligibility
         <div className="flex items-start gap-3">
           {loading ? <Spinner /> : null}
           <div>
-            <p className="text-sm font-medium">{loading ? 'Comparing the job requirements with your master resume…' : fit.status === 'error' ? 'The fit analysis could not finish' : 'Your fit has not been assessed yet'}</p>
+            <p className="text-sm font-medium">{loading ? (report ? 'Updating the assessment with your latest changes…' : 'Comparing the job requirements with your master resume…') : fit.status === 'error' ? 'The fit analysis could not finish' : 'Your fit has not been assessed yet'}</p>
             <p className="mt-1 text-xs text-[var(--color-muted)]">{report ? 'The previous assessment is shown below until a new one is ready.' : 'Gaps and relevant experience will appear here when the analysis finishes.'}</p>
             {fit.error ? <details className="mt-2 text-xs text-[var(--color-muted)]"><summary className="cursor-pointer">Error details</summary><p className="mt-1 break-words">{fit.error}</p></details> : null}
           </div>

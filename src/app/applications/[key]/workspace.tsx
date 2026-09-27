@@ -310,6 +310,7 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
       })
       savedDraft.current = saved.draftYaml
       setDraft(saved.draftYaml); setWorkspace(saved); revision.current = saved.revision
+      if (action === 'accept') router.push(`/applications/${encodeURIComponent(app.key)}/next-steps`)
       router.refresh()
     } catch (reason) { setError((reason as Error).message) } finally { setBusy(false) }
   }
@@ -327,6 +328,7 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
         return data.workspace as ApplicationWorkspace
       })
       setWorkspace(result); revision.current = result.revision
+      router.push(`/applications/${encodeURIComponent(app.key)}/next-steps`)
       router.refresh()
     } catch (reason) { setError((reason as Error).message) } finally { setBusy(false) }
   }
@@ -400,6 +402,7 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
         <div className="min-w-0"><Link href="/applications" className="text-xs text-[var(--color-faint)] hover:text-[var(--color-accent)]">← Applications</Link><h1 className="mt-1 truncate text-lg font-semibold">{app.row?.company ?? app.folder?.slug ?? 'Application'}</h1><p className="truncate text-xs text-[var(--color-muted)]">{app.row?.role ?? 'No tracker row linked'}</p></div>
         <div className="flex flex-wrap items-center gap-2">
           {app.row ? <Badge tone={statusTone(status)}>{status}</Badge> : null}
+          {app.folder?.has.pdf ? <Link href={`/applications/${encodeURIComponent(app.key)}/next-steps`} className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-accent)] hover:bg-[var(--color-surface-2)]">Next steps</Link> : null}
           {app.row && status !== 'Applied' ? <button disabled={busy} onClick={() => void patchStatus('Applied')} className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-bg)] disabled:opacity-40">Mark as Applied</button> : null}
           {app.row ? <select value={status} disabled={busy} onChange={(event) => void patchStatus(event.target.value)} className="h-8 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs">{STATUSES.map((value) => <option key={value}>{value}</option>)}{!STATUSES.includes(status as never) && status ? <option>{status}</option> : null}</select> : null}
           {app.folder ? <Link href={`/runs?applicationKey=${encodeURIComponent(app.key)}`} className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">AI runs</Link> : null}

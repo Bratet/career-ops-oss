@@ -19,6 +19,7 @@ it is deployable to a serverless host.
 | `/applications/[key]` | canonical application workspace: overview and fit, persistent resume draft/preview, source files, runs, and assistant |
 | `/profile` | edit the English or French master resume — the source material for every tailored CV |
 | `/plan` | Apply plan — a board of saved job-search URLs to return to |
+| `/applications/[key]/next-steps` | finalize follow-up: update status and notes, draft and save an optional cover letter, email, or LinkedIn message |
 | `/applications/[key]/editor` | compatibility redirect to the Resume tab in the canonical workspace |
 | Header **New application** | opens a posting dialog → engine analyzes it → creates a `Preparing` application and opens its workspace |
 
@@ -251,3 +252,16 @@ rendered PDF layout and extraction are not assessed.
 LinkedIn search, a company's careers page, whatever you return to routinely —
 each tagged with an optional track and notes. It's just a bookmark board backed
 by `workspace/state/saved-searches.json`; nothing here reads or scrapes those URLs.
+
+
+## Recent improvements
+
+Fit assessments now include saved candidate guidance alongside master-resume evidence.
+Confirmations made in the analysis chat can be saved to guidance for future applications.
+When the inputs change, the refresh compares them with the previous assessment and keeps
+unaffected rows; chat corrections can also be saved while a refresh is queued.
+
+After accepting or finalizing a resume, **Next steps** opens the finalized PDF, lets you
+update tracker status and notes, and offers optional message drafts based on that resume
+and the job posting. Generated drafts must be saved explicitly. Messages are never sent
+by the app.

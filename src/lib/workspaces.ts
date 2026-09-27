@@ -9,6 +9,7 @@ import type { RequirementAction } from './tailoring/rules'
 import type { ProfileFitReport } from './profileFit'
 import { withTailoredDesign } from './tailoring/seed'
 import { generalApplicationSchema, type GeneralApplication } from './generalApplication'
+import type { OutreachDrafts } from './outreach'
 
 const KEY = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/
 const VERSION = 1
@@ -32,6 +33,7 @@ export interface WorkspaceProposal {
 }
 
 export interface ApplicationWorkspace {
+  outreach?: OutreachDrafts
   version: 1
   general?: boolean
   generalDetails?: GeneralApplication | null
@@ -50,9 +52,19 @@ export interface ApplicationWorkspace {
     error: string | null
     jdHash: string
     masterHash: string
+    /** Absent on records created before guidance was part of the fit inputs. */
+    guidanceHash?: string
+    /** The exact inputs the current report reflects, so a refresh can see what changed. */
+    basis?: FitBasis | null
     startedAt: string | null
     completedAt: string | null
   }
+}
+
+export interface FitBasis {
+  jdHash: string
+  master: string
+  guidance: string
 }
 
 export class WorkspaceRevisionConflict extends Error {
@@ -67,7 +79,7 @@ export function contentHash(value: string): string {
 }
 
 export async function workspaceInputs(key: string): Promise<{
-  analysis: JdAnalysis | null; jd: string; masterYaml: string; acceptedYaml: string; general: boolean; generalDetails: GeneralApplication | null
+  analysis: JdAnalysis | null; jd: string; masterYaml: string; guidance: string; acceptedYaml: string; general: boolean; generalDetails: GeneralApplication | null
 }> {
   const app = await getApplication(key)
   if (!app) throw new Error('application not found')
@@ -86,7 +98,8 @@ export async function workspaceInputs(key: string): Promise<{
   const metadata = folder ? await readDoc(folder, APP_FILES.general) : null
   const general = metadata ? generalApplicationSchema.parse(JSON.parse(metadata)) : null
   try { masterYaml = await readFile(general ? PATHS.ownCv[general.language] : PATHS.masters[analysis?.language ?? 'en'], 'utf-8') } catch {}
-  return { analysis, jd: jd ?? '', masterYaml, acceptedYaml: acceptedYaml ?? masterYaml, general: !!general, generalDetails: general }
+  const guidance = await readFile(PATHS.candidateGuidance, 'utf-8').catch(() => '')
+  return { analysis, jd: jd ?? '', masterYaml, guidance, acceptedYaml: acceptedYaml ?? masterYaml, general: !!general, generalDetails: general }
 }
 
 export async function readWorkspace(key: string): Promise<ApplicationWorkspace> {
@@ -117,7 +130,8 @@ export async function createWorkspace(key: string): Promise<ApplicationWorkspace
     draftYaml, generalDetails: inputs.generalDetails, acceptedBaseHash: contentHash(draftYaml), pendingProposal: null,
     fit: {
       status: canFit ? 'queued' : 'idle', report: null, runId: null, error: null,
-      jdHash: contentHash(inputs.jd), masterHash: contentHash(inputs.masterYaml), startedAt: null, completedAt: null,
+      jdHash: contentHash(inputs.jd), masterHash: contentHash(inputs.masterYaml), guidanceHash: contentHash(inputs.guidance),
+      basis: null, startedAt: null, completedAt: null,
     },
   }
   await mkdir(PATHS.workspaces, { recursive: true })
@@ -128,16 +142,20 @@ export async function createWorkspace(key: string): Promise<ApplicationWorkspace
 function refreshFitState(record: ApplicationWorkspace, inputs: Awaited<ReturnType<typeof workspaceInputs>>): ApplicationWorkspace {
   const jdHash = contentHash(inputs.jd)
   const masterHash = contentHash(inputs.masterYaml)
+  const guidanceHash = contentHash(inputs.guidance)
+  // Older records never recorded guidance; adopt the current file rather than
+  // re-running every existing application at once.
+  const guidanceChanged = record.fit.guidanceHash !== undefined && record.fit.guidanceHash !== guidanceHash
   const staleRun = record.fit.status === 'running' && !!record.fit.startedAt
     && Date.now() - Date.parse(record.fit.startedAt) > 10 * 60_000
   const revisionFailure = record.fit.status === 'error' && record.fit.error?.startsWith('workspace changed: expected revision')
-  if (record.fit.jdHash !== jdHash || record.fit.masterHash !== masterHash || staleRun || revisionFailure) {
+  if (record.fit.jdHash !== jdHash || record.fit.masterHash !== masterHash || guidanceChanged || staleRun || revisionFailure) {
     return {
       ...record,
       fit: {
         ...record.fit, status: inputs.analysis && inputs.masterYaml ? 'queued' : 'idle',
         error: staleRun ? 'The previous fit run was interrupted and can be retried.' : null,
-        jdHash, masterHash, startedAt: null,
+        jdHash, masterHash, guidanceHash, startedAt: null,
       },
     }
   }
@@ -158,6 +176,15 @@ export async function updateWorkspace(
     await atomicWrite(workspacePath(key), next)
     return next
   })
+}
+
+/** Fit fields that mark a report as reflecting exactly these inputs. */
+export function fitBasisFields(inputs: { jd: string; masterYaml: string; guidance: string }): Pick<ApplicationWorkspace['fit'], 'jdHash' | 'masterHash' | 'guidanceHash' | 'basis'> {
+  const jdHash = contentHash(inputs.jd)
+  return {
+    jdHash, masterHash: contentHash(inputs.masterYaml), guidanceHash: contentHash(inputs.guidance),
+    basis: { jdHash, master: inputs.masterYaml, guidance: inputs.guidance },
+  }
 }
 
 export function makeProposal(input: Omit<WorkspaceProposal, 'id' | 'createdAt' | 'choices'>): WorkspaceProposal {

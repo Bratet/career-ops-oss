@@ -24,17 +24,31 @@ import {
 
 const BIN = process.env.CAREER_OPS_CLAUDE_BIN || 'claude'
 
-/** The aliases `claude --help` documents, which every account can run. */
+/**
+ * Family aliases follow the CLI's recommended version; full IDs pin a version.
+ * Availability still depends on the signed-in account and CLI version.
+ * https://code.claude.com/docs/en/model-config
+ */
 const BUILT_IN: ModelOption[] = [
-  { id: 'opus', label: 'Opus', note: 'Most capable; the long-standing default here' },
-  { id: 'sonnet', label: 'Sonnet', note: 'Faster, lighter on the subscription quota' },
-  { id: 'haiku', label: 'Haiku', note: 'Fastest; weakest at long rulebooks' },
+  { id: 'opus', label: 'Opus (CLI recommended)', note: 'Follows the CLI’s recommended Opus version' },
+  { id: 'claude-opus-5-5', label: 'Opus 5.5' },
+  { id: 'claude-opus-5', label: 'Opus 5' },
+  { id: 'claude-opus-4-8', label: 'Opus 4.8' },
+  { id: 'claude-opus-4-7', label: 'Opus 4.7' },
+  { id: 'claude-opus-4-6', label: 'Opus 4.6' },
+  { id: 'claude-opus-4-5-20251101', label: 'Opus 4.5' },
+  { id: 'sonnet', label: 'Sonnet (CLI recommended)', note: 'Follows the CLI’s recommended Sonnet version' },
+  { id: 'claude-sonnet-5', label: 'Sonnet 5' },
+  { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
+  { id: 'claude-sonnet-4-5-20250929', label: 'Sonnet 4.5' },
+  { id: 'haiku', label: 'Haiku (CLI recommended)', note: 'Follows the CLI’s recommended Haiku version' },
+  { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
 ]
 
 /**
  * Anything extra the account has access to, as the CLI itself last saw it.
- * Read-only and best-effort: a missing or reshaped file just means the three
- * universal aliases above.
+ * Read-only and best-effort: a missing or reshaped file falls back to the
+ * built-in catalog above.
  */
 async function extraModels(): Promise<ModelOption[]> {
   try {
@@ -59,8 +73,12 @@ export const claudeEngine: Engine = {
 
   async models(): Promise<ModelOption[]> {
     const extra = await extraModels()
-    const seen = new Set(BUILT_IN.map((m) => m.id))
-    return [...BUILT_IN, ...extra.filter((m) => !seen.has(m.id)), CLI_DEFAULT]
+    const seen = new Set<string>()
+    return [...BUILT_IN, ...extra, CLI_DEFAULT].filter((model) => {
+      if (seen.has(model.id)) return false
+      seen.add(model.id)
+      return true
+    })
   },
 
   async status(): Promise<EngineStatus> {

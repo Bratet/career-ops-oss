@@ -21,7 +21,8 @@
     "test:engine-settings": "tsx scripts/test-engine-settings.ts",
     "test:application-delete": "tsx scripts/test-application-delete.ts",
     "test:workspaces": "tsx scripts/test-workspaces.ts",
-    "test:application-flow": "tsx scripts/test-application-flow.ts"
+    "test:application-flow": "tsx scripts/test-application-flow.ts",
+    "test:outreach": "tsx scripts/test-outreach.ts"
   },
   "dependencies": {
     "@codemirror/lang-yaml": "^6.1.2",
