@@ -252,6 +252,8 @@ rendered PDF layout and extraction are not assessed.
 LinkedIn search, a company's careers page, whatever you return to routinely —
 each tagged with an optional track and notes. It's just a bookmark board backed
 by `workspace/state/saved-searches.json`; nothing here reads or scrapes those URLs.
+A fresh clone includes one example software-engineer search. Edit or delete it
+and add your own saved searches.
 
 
 ## Recent improvements
