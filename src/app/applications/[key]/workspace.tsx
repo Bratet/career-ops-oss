@@ -6,7 +6,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Lock } from 'lucide-react'
 import type { ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import type { Application } from '@/lib/applications'
-import { coverLetterFromWorkspace, senderFromResume } from '@/lib/coverLetter'
+import { coverLetterFromWorkspace, letterSalutation, senderFromResume } from '@/lib/coverLetter'
+import type { Lang } from '@/lib/paths'
 import type { PostingContact } from '@/lib/postingContact'
 import type { JdAnalysis } from '@/lib/tailoring/jd'
 import type { ApplicationWorkspace, WorkspaceProposal } from '@/lib/workspaces'
@@ -57,8 +58,9 @@ function withFinalizedPdf(app: Application, pdfName: string | null): Application
   }
 }
 
-export function ApplicationWorkspaceView({ app: serverApp, initialWorkspace, analysis, eligibility, contact, finalized: finalizedAtLoad }: {
+export function ApplicationWorkspaceView({ app: serverApp, initialWorkspace, analysis, language, eligibility, contact, finalized: finalizedAtLoad }: {
   app: Application
+  language: Lang
   contact: PostingContact
   finalized: FinalizedState
   eligibility: EligibilityIssue[]
@@ -534,7 +536,8 @@ export function ApplicationWorkspaceView({ app: serverApp, initialWorkspace, ana
           companyName: app.row?.company ?? '',
           paper: senderFromResume(workspace.draftYaml).paper,
           recipientName: contact.name ?? '',
-          salutation: contact.firstName ? `Dear ${contact.firstName},` : '',
+          salutation: letterSalutation(contact.firstName ?? '', language),
+          lang: language,
         })}
         contact={contact}
         letterFinalized={finalizedAtLoad.letter}

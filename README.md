@@ -280,7 +280,8 @@ draft, and errors include a retry action when available.
 
 The cover letter editor uses the finalized resume for sender details, previews a
 one-page Typst PDF, and saves its inputs beside the PDF so edits can be checked
-against the finalized version. The `write-cover-letter` and `write-outreach`
+against the finalized version. New letters follow the application's English or
+French language. The `write-cover-letter` and `write-outreach`
 skills are editable on the Skills page. The included versions contain generic
 instructions; add your own voice and preferences to your local workspace.
 

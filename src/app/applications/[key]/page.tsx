@@ -7,7 +7,7 @@ import { letterFromInputs } from '@/lib/coverLetter'
 import { APP_FILES, PATHS } from '@/lib/paths'
 import { jdAnalysisParser } from '@/lib/tailoring/jd'
 import { postingContact } from '@/lib/postingContact'
-import { readWorkspace } from '@/lib/workspaces'
+import { applicationLanguage, readWorkspace } from '@/lib/workspaces'
 import { ApplicationWorkspaceView } from './workspace'
 
 export const dynamic = 'force-dynamic'
@@ -31,10 +31,11 @@ export default async function ApplicationPage({ params }: { params: Promise<{ ke
   const app = await getApplication(key)
   if (!app) notFound()
   const folder = app.folder?.folder
-  const [analysisText, workspace, jd] = await Promise.all([
+  const [analysisText, workspace, jd, language] = await Promise.all([
     folder ? readDoc(folder, APP_FILES.analysis) : null,
     readWorkspace(key),
     folder ? readDoc(folder, APP_FILES.jd) : null,
+    applicationLanguage(folder),
   ])
   let analysis = null
   if (analysisText) {
@@ -49,5 +50,5 @@ export default async function ApplicationPage({ params }: { params: Promise<{ ke
     resume: resumePdf ? { at: resumePdf.at, yaml: resumePdf.text } : null,
     letter: letterPdf ? { at: letterPdf.at, letter: letterFromInputs(letterPdf.text) } : null,
   }
-  return <ApplicationWorkspaceView eligibility={analysis ? eligibilityIssues(analysis, eligibility) : []} app={app} initialWorkspace={workspace} analysis={analysis} contact={postingContact(jd)} finalized={finalized} />
+  return <ApplicationWorkspaceView eligibility={analysis ? eligibilityIssues(analysis, eligibility) : []} app={app} initialWorkspace={workspace} analysis={analysis} language={language} contact={postingContact(jd)} finalized={finalized} />
 }

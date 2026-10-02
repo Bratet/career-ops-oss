@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'crypto'
 import { mkdir, readFile, rename, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { getApplication, readDoc } from './applications'
-import { APP_FILES, PATHS } from './paths'
+import { APP_FILES, PATHS, type Lang } from './paths'
 import { jdAnalysisParser, type JdAnalysis } from './tailoring/jd'
 import type { Op } from './tailoring/ops'
 import type { RequirementAction } from './tailoring/rules'
@@ -103,6 +103,20 @@ export async function workspaceInputs(key: string): Promise<{
   try { masterYaml = await readFile(general ? PATHS.ownCv[general.language] : PATHS.masters[analysis?.language ?? 'en'], 'utf-8') } catch {}
   const guidance = await readFile(PATHS.candidateGuidance, 'utf-8').catch(() => '')
   return { analysis, jd: jd ?? '', masterYaml, guidance, acceptedYaml: acceptedYaml ?? masterYaml, general: !!general, generalDetails: general }
+}
+
+/** The selected general-application language, or the analyzed posting's language. */
+export async function applicationLanguage(folder: string | undefined): Promise<Lang> {
+  if (!folder) return 'en'
+  const [metadata, analysisText] = await Promise.all([readDoc(folder, APP_FILES.general), readDoc(folder, APP_FILES.analysis)])
+  try {
+    if (metadata) return generalApplicationSchema.parse(JSON.parse(metadata)).language
+    if (analysisText) {
+      const parsed = jdAnalysisParser.safeParse(JSON.parse(analysisText))
+      if (parsed.success) return parsed.data.language
+    }
+  } catch {}
+  return 'en'
 }
 
 export async function readWorkspace(key: string): Promise<ApplicationWorkspace> {

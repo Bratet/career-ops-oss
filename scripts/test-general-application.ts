@@ -13,7 +13,7 @@ try {
   await mkdir(dirname(PATHS.ownCv.en), { recursive: true })
   await writeFile(PATHS.tracker, '| # | Date | Company | Role | Score | Status | PDF | Report | Notes |\n|---|------|---------|------|-------|--------|-----|--------|-------|\n')
   const { POST } = await import('../src/app/api/applications/general/route')
-  const { readWorkspace, updateWorkspace } = await import('../src/lib/workspaces')
+  const { applicationLanguage, readWorkspace, updateWorkspace } = await import('../src/lib/workspaces')
   const { PUT } = await import('../src/app/api/masters/[lang]/route')
   for (const language of ['en', 'fr'] as const) {
     const yaml = `cv:\n  name: General ${language}\ndesign:\n  theme: classic\n`
@@ -25,6 +25,7 @@ try {
     const { key, warning } = await response.json()
     assert.equal(warning, null)
     const workspace = await readWorkspace(key)
+    assert.equal(await applicationLanguage(key), language)
     assert.equal(workspace.draftYaml, yaml, 'general source and design remain byte-identical')
     assert.equal(workspace.fit.status, 'idle')
     assert.equal(workspace.generalDetails?.contact, 'HR')

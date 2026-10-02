@@ -11,7 +11,9 @@ import {
   coverLetterSchema,
   emptyCoverLetter,
   formatLetterDate,
+  letterAgentPrompt,
   letterAgentSchema,
+  letterSalutation,
   letterInputs,
   senderFromResume,
   wordCount,
@@ -35,6 +37,16 @@ const sender = { name: 'Jordan Candidate', email: 'jordan@example.com', phone: '
 assert.equal(letter.date, 'September 28, 2026')
 assert.equal(formatLetterDate(today, 'fr'), '28 septembre 2026')
 assert.equal(letter.closing, 'Sincerely,')
+const french = emptyCoverLetter({ companyName: 'Example Co', today, lang: 'fr' })
+assert.equal(french.date, '28 septembre 2026')
+assert.equal(french.closing, 'Cordialement,')
+assert.equal(coverLetterFromWorkspace(undefined, undefined, { companyName: 'Example Co', paper: 'a4', lang: 'fr' }).closing, 'Cordialement,')
+assert.equal(letterSalutation('Claire', 'fr'), 'Bonjour Claire,')
+assert.equal(letterSalutation('Claire'), 'Dear Claire,')
+assert.equal(letterSalutation(''), '')
+const promptFor = (lang: 'en' | 'fr') => letterAgentPrompt({ skill: '', company: 'Example Co', role: 'Engineer', lang, resumeYaml: '', jd: null, guidance: '', letter: french, conversation: [], message: 'Draft it' })
+assert.match(promptFor('fr'), /application is in French, so write the letter in French/)
+assert.match(promptFor('en'), /application is in English, so write the letter in English/)
 assert.equal(wordCount('  one two\n\nthree '), 3)
 assert.equal(wordCount(''), 0)
 

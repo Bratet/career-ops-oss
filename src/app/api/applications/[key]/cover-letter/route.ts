@@ -6,7 +6,7 @@ import { assertLetterBase, CoverLetterConflict, coverLetterSchema, letterAgentPr
 import { getEngine } from '@/lib/engine'
 import { getSkillForRunner } from '@/lib/skills/registry'
 import { APP_FILES, PATHS } from '@/lib/paths'
-import { readWorkspace, updateWorkspace } from '@/lib/workspaces'
+import { applicationLanguage, readWorkspace, updateWorkspace } from '@/lib/workspaces'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -47,10 +47,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ key: st
     const app = await getApplication(key)
     const yamlName = app?.folder?.docs.find((doc) => doc.key === 'yaml')?.name
     if (!app?.folder?.has.pdf || !yamlName) throw new Error('Finalize a resume before writing a cover letter')
-    const [resumeYaml, jd, guidance] = await Promise.all([
+    const [resumeYaml, jd, guidance, lang] = await Promise.all([
       readDoc(app.folder.folder, yamlName),
       readDoc(app.folder.folder, APP_FILES.jd),
       readFile(PATHS.candidateGuidance, 'utf-8').catch(() => ''),
+      applicationLanguage(app.folder.folder),
     ])
     const [engine, skill] = await Promise.all([getEngine('editor-chat'), getSkillForRunner('write-cover-letter', 'text-artifact')])
     const result = await engine.runStructured<{ reply: string; letter: CoverLetter }>({
@@ -60,6 +61,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ key: st
         skill: skill.instructions,
         company: app.row?.company ?? app.folder.slug,
         role: app.row?.role ?? 'the advertised role',
+        lang,
         resumeYaml: resumeYaml ?? '',
         jd,
         guidance,

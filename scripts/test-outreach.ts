@@ -39,7 +39,7 @@ assert.match(withLetter, /SKILL-TEXT/)
 assert.match(withLetter, /do not repeat anything it says/)
 assert.match(withLetter, /Letter body\./)
 assert.doesNotMatch(outreachPrompt({ kind: 'linkedin', skill: 's', company: 'Acme', role: 'r', resume: '', jd: null, coverLetter: null, instructions: '' }), /Cover letter body/)
-assert.match(letterAgentPrompt({ skill: 'LETTER-SKILL', company: 'Acme', role: 'r', resumeYaml: '', jd: null, guidance: '', letter: emptyCoverLetter(), conversation: [], message: 'Draft it' }), /LETTER-SKILL/)
+assert.match(letterAgentPrompt({ skill: 'LETTER-SKILL', company: 'Acme', role: 'r', lang: 'en', resumeYaml: '', jd: null, guidance: '', letter: emptyCoverLetter(), conversation: [], message: 'Draft it' }), /LETTER-SKILL/)
 
 assert.equal(letterBody(JSON.stringify({ content: '  Hello.\n\nBye.  ' })), 'Hello.\n\nBye.')
 assert.equal(letterBody(null), null)
