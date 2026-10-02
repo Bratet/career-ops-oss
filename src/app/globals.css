@@ -186,6 +186,18 @@ input, textarea { caret-color: var(--color-accent); }
 .application-flow-number { font-size: 18px; font-weight: 600; color: var(--color-muted); }
 .application-flow-step[aria-current='step'] .application-flow-number { color: var(--color-accent); }
 
+/* The step to go to next glows. drop-shadow sits on the li because the
+   button's clip-path would cut off a box-shadow. */
+.application-flow li[data-next] { animation: application-flow-glow 2.4s ease-in-out infinite; }
+.application-flow li[data-next] .application-flow-number { color: var(--color-accent); }
+@keyframes application-flow-glow {
+  0%, 100% { filter: drop-shadow(0 0 0 transparent); }
+  50% { filter: drop-shadow(0 0 7px var(--color-accent)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .application-flow li[data-next] { animation: none; filter: drop-shadow(0 0 4px var(--color-accent)); }
+}
+
 @media (max-width: 639px) {
   .application-flow { grid-template-columns: minmax(0, 1fr); }
   .application-flow-step { padding: 14px 30px 14px 18px; }

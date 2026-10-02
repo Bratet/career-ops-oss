@@ -9,8 +9,8 @@ import { parse } from 'yaml'
  * and three empty sections. This is a mechanical merge of the tailoring output
  * into that stub, not another model call.
  *
- * It rewrites only the sections it owns. Anything the user typed into the
- * file by hand outside them survives untouched.
+ * It rewrites only the sections it owns. Anything the candidate typed into the file by
+ * hand outside them survives untouched.
  */
 
 export interface NotesPatch {

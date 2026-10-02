@@ -4,7 +4,7 @@
 # Everything runs on localhost; nothing here deploys anywhere.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup dev build start stop check test reconcile engines clean nuke
+.PHONY: help setup dev build start stop check test reconcile engines extension clean nuke
 
 PORT ?= 3000
 
@@ -42,7 +42,8 @@ check: node_modules ## Typecheck
 	@npx tsc --noEmit && echo "types ok"
 
 test: node_modules ## Tracker and tailoring tests
-	@npm run test:weeks
+	@npm run test:activity
+	@npm run test:goal
 	@npm run test:saved-searches
 	@npm run test:resume-review
 	@npm run test:general-application
@@ -53,13 +54,22 @@ test: node_modules ## Tracker and tailoring tests
 	@npm run test:runs
 	@npm run test:editor-chat
 	@npm run test:engine-settings
+	@npm run test:model-catalogs
 	@npm run test:application-delete
 	@npm run test:workspaces
 	@npm run test:application-flow
 	@npm run test:outreach
+	@npm run test:cover-letter
+	@npm run test:posting-contact
+	@npm run test:friendly-error
+	@npm run test:duplicates
+	@npm run test:visa-badge
 
 reconcile: node_modules ## Rebuild workspace/state/app-index.json from folder names
 	@npm run reconcile
+
+extension: ## Build the LinkedIn visa-badge Chrome extension
+	@cd extension/visa-badge && npm ci --silent && npm run build
 
 engines: ## Report whether the Claude and Codex CLIs are available
 	@printf 'claude  '; claude --version 2>/dev/null || echo "not found — install Claude Code and run 'claude login'"

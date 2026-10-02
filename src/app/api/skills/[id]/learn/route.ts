@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getEngine } from '@/lib/engine'
 import { getSkill } from '@/lib/skills/registry'
 import { parseSkill } from '@/lib/skills/parser'
-import { learningPrompt, learningTurns } from '@/lib/skills/learning'
+import { isLearnableSkill, learningPrompt, learningTurns } from '@/lib/skills/learning'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -11,7 +11,7 @@ export const maxDuration = 900
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    if (id !== 'tailor-cv' && id !== 'analyze-job' && id !== 'profile-fit') throw new Error('Unsupported learning target')
+    if (!isLearnableSkill(id)) throw new Error('Unsupported learning target')
     const body = await req.json()
     const turns = learningTurns(body.turns)
     const skill = await getSkill(id)

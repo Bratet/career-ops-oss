@@ -89,7 +89,7 @@ export function FeatureEnginePicker({
         aria-label={`${feature} AI model`}
         className={`${selectClass} max-w-52`}
       >
-        {!modelListed && state ? <option value={state.model}>{state.model || 'CLI default'}</option> : null}
+        {!modelListed && state ? <option value={state.model}>{state.model || 'Default'}</option> : null}
         {models.map((model) => (
           <option key={model.id || 'default'} value={model.id}>{model.label}</option>
         ))}

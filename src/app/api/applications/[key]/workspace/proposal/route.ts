@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { finalizeWorkspaceArtifacts } from '@/lib/finalizeWorkspace'
-import { contentHash, makeProposal, updateWorkspace, WorkspaceRevisionConflict } from '@/lib/workspaces'
+import { writeAcceptedTailoringNotes } from '@/lib/finalizeWorkspace'
+import { contentHash, makeProposal, updateWorkspace, WorkspaceRevisionConflict, type WorkspaceProposal } from '@/lib/workspaces'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -43,17 +43,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ key: s
     if (!Number.isInteger(body.revision) || (body.action !== 'accept' && body.action !== 'reject' && body.action !== 'update')) {
       throw new Error('revision and a valid action are required')
     }
-    let finalized: Awaited<ReturnType<typeof finalizeWorkspaceArtifacts>> | null = null
-    let proposalForFinalize = null
-    if (body.action === 'accept') {
-      const current = await import('@/lib/workspaces').then((module) => module.readWorkspace(key))
-      if (current.revision !== body.revision) throw new WorkspaceRevisionConflict(body.revision as number, current.revision)
-      if (!current.pendingProposal) throw new Error('no pending proposal')
-      const yaml = typeof body.yaml === 'string' ? body.yaml : current.draftYaml
-      if (yaml !== current.draftYaml) throw new Error('the draft changed since this proposal was reviewed')
-      proposalForFinalize = current.pendingProposal
-      finalized = await finalizeWorkspaceArtifacts(key, yaml, proposalForFinalize)
-    }
+    // Accepting keeps the changes in the draft only. The PDF, and with it the
+    // next-steps tab, comes from the separate finalize action.
+    let accepted = null as WorkspaceProposal | null
     const workspace = await updateWorkspace(key, body.revision as number, (current) => {
       const proposal = current.pendingProposal
       if (!proposal) throw new Error('no pending proposal')
@@ -62,9 +54,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ key: s
         return { ...current, draftYaml: body.yaml, pendingProposal: { ...proposal, currentYaml: body.yaml, choices: body.choices as boolean[] } }
       }
       if (body.action === 'reject') return { ...current, draftYaml: proposal.beforeYaml, pendingProposal: null }
+      if (typeof body.yaml === 'string' && body.yaml !== current.draftYaml) throw new Error('the draft changed since this proposal was reviewed')
+      accepted = proposal
       return { ...current, pendingProposal: null, acceptedBaseHash: contentHash(current.draftYaml) }
     })
-    return NextResponse.json({ workspace, finalized })
+    if (accepted) await writeAcceptedTailoringNotes(key, workspace.draftYaml, accepted)
+    return NextResponse.json({ workspace })
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: error instanceof WorkspaceRevisionConflict ? 409 : 400 })
   }

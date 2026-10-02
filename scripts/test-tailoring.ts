@@ -75,7 +75,7 @@ check('skill protects runtime context', placeholdersProtected)
 const prompt = tailorPrompt('cv:\n  name: Example', ranked, skill.instructions)
 check('prompt follows ranked requirement order', prompt.indexOf('[must 1]') < prompt.indexOf('[must 2]'))
 check('prompt uses evidence-first actions', prompt.includes('lead: decisive evidence') && prompt.includes('prove: a concrete achievement'))
-check('old candidate-specific rulebook removed', !prompt.includes('roles at my employer always stay'))
+check('old candidate-specific rulebook removed', !prompt.includes('employer roles always stay'))
 
 const priorOp: Op = {
   op: 'drop',

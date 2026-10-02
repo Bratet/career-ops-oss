@@ -9,7 +9,13 @@ interface PreviewPage {
   height: number
 }
 
-export function PdfPreview({ token }: { token: string | null }) {
+export function PdfPreview({ token, document: label = 'CV', engine = 'RenderCV', source = 'YAML' }: {
+  token: string | null
+  /** What the preview shows, for its empty states and alt text. */
+  document?: string
+  engine?: string
+  source?: string
+}) {
   const [pages, setPages] = useState<PreviewPage[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -79,10 +85,10 @@ export function PdfPreview({ token }: { token: string | null }) {
   }, [])
 
   if (!pages.length && loading) {
-    return <Empty title="Rendering preview" hint="The first page will appear as soon as RenderCV finishes." />
+    return <Empty title="Rendering preview" hint={`The first page will appear as soon as ${engine} finishes.`} />
   }
   if (!pages.length && error) return <Empty title="Preview unavailable" hint={error} />
-  if (!pages.length) return <Empty title="No preview yet" hint="The CV appears here once the YAML renders." />
+  if (!pages.length) return <Empty title="No preview yet" hint={`The ${label} appears here once the ${source} renders.`} />
 
   return (
     <div className="relative h-full overflow-y-auto bg-[var(--color-surface-2)] p-3">
@@ -96,7 +102,7 @@ export function PdfPreview({ token }: { token: string | null }) {
             src={page.url}
             width={page.width}
             height={page.height}
-            alt={`CV preview page ${index + 1}`}
+            alt={`${label} preview page ${index + 1}`}
             className="h-auto w-full bg-white shadow-sm"
           />
         ))}

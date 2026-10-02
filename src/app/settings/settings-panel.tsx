@@ -117,7 +117,7 @@ export function SettingsPanel({ initial }: { initial: SettingsData }) {
                   </label>
                   <label className="text-xs font-medium text-[var(--color-muted)]">Model
                     <select aria-label={`${title} model`} value={choice.model} disabled={saving === id} onChange={(event) => void save(id, { model: event.target.value })} className="mt-1.5 h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 text-sm text-[var(--color-text)] focus-visible:outline-2 focus-visible:outline-[var(--color-accent)] disabled:opacity-50">
-                      {!listed ? <option value={choice.model}>{choice.model || 'CLI default'}</option> : null}
+                      {!listed ? <option value={choice.model}>{choice.model || 'Default'}</option> : null}
                       {available.map((model) => <option key={model.id || 'default'} value={model.id}>{model.label}</option>)}
                     </select>
                   </label>

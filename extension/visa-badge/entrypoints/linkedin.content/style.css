@@ -1,0 +1,70 @@
+.visa-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.visa-badges--floating {
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  z-index: 9999;
+  max-width: min(520px, calc(100vw - 32px));
+  margin: 0;
+  padding: 8px;
+  border-radius: 12px;
+  background: #fff;
+  color: #1f2937;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+}
+
+.visa-badge {
+  --visa-color: #6b7280;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid color-mix(in srgb, var(--visa-color) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--visa-color) 14%, transparent);
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  cursor: help;
+}
+
+.visa-badge__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--visa-color);
+}
+
+.visa-badge__extra {
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+.visa-badge--yes { --visa-color: #16a34a; }
+.visa-badge--no { --visa-color: #dc2626; }
+.visa-badge--likely-no { --visa-color: #d97706; }
+.visa-badge--unknown { --visa-color: #6b7280; }
+
+.visa-badge--anywhere { --visa-color: #16a34a; }
+.visa-badge--timezone { --visa-color: #0d9488; }
+.visa-badge--europe-only { --visa-color: #dc2626; }
+.visa-badge--unclear,
+.visa-badge--not-remote { --visa-color: #6b7280; }
+
+.visa-badge--setup,
+.visa-badge--error { --visa-color: #6b7280; }
+.visa-badge--loading { --visa-color: #6b7280; font-weight: 400; }
+.visa-badge--loading .visa-badge__dot { animation: visa-badge-pulse 1s ease-in-out infinite; }
+.visa-badge--unsure { border-style: dashed; font-weight: 400; }
+.visa-badge--clickable { cursor: pointer; }
+
+@keyframes visa-badge-pulse {
+  50% { opacity: 0.25; }
+}

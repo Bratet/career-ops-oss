@@ -1,16 +1,12 @@
-import { readFile } from 'fs/promises'
 import { randomUUID } from 'crypto'
-import { homedir } from 'os'
-import { join } from 'path'
 import { PATHS } from '../paths'
 import { runCli, probeVersion } from './spawn'
+import { claudeModels, resolveClaudeModel } from './claudeModels'
 import {
-  CLI_DEFAULT,
   EngineError,
   modelArgs,
   type Engine,
   type EngineStatus,
-  type ModelOption,
   type RunOptions,
 } from './types'
 
@@ -24,62 +20,12 @@ import {
 
 const BIN = process.env.CAREER_OPS_CLAUDE_BIN || 'claude'
 
-/**
- * Family aliases follow the CLI's recommended version; full IDs pin a version.
- * Availability still depends on the signed-in account and CLI version.
- * https://code.claude.com/docs/en/model-config
- */
-const BUILT_IN: ModelOption[] = [
-  { id: 'opus', label: 'Opus (CLI recommended)', note: 'Follows the CLI’s recommended Opus version' },
-  { id: 'claude-opus-5-5', label: 'Opus 5.5' },
-  { id: 'claude-opus-5', label: 'Opus 5' },
-  { id: 'claude-opus-4-8', label: 'Opus 4.8' },
-  { id: 'claude-opus-4-7', label: 'Opus 4.7' },
-  { id: 'claude-opus-4-6', label: 'Opus 4.6' },
-  { id: 'claude-opus-4-5-20251101', label: 'Opus 4.5' },
-  { id: 'sonnet', label: 'Sonnet (CLI recommended)', note: 'Follows the CLI’s recommended Sonnet version' },
-  { id: 'claude-sonnet-5', label: 'Sonnet 5' },
-  { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
-  { id: 'claude-sonnet-4-5-20250929', label: 'Sonnet 4.5' },
-  { id: 'haiku', label: 'Haiku (CLI recommended)', note: 'Follows the CLI’s recommended Haiku version' },
-  { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
-]
-
-/**
- * Anything extra the account has access to, as the CLI itself last saw it.
- * Read-only and best-effort: a missing or reshaped file falls back to the
- * built-in catalog above.
- */
-async function extraModels(): Promise<ModelOption[]> {
-  try {
-    const raw = await readFile(join(homedir(), '.claude.json'), 'utf-8')
-    const cache = JSON.parse(raw)?.additionalModelOptionsCache
-    if (!Array.isArray(cache)) return []
-    return cache
-      .filter((m) => typeof m?.value === 'string' && m.value)
-      .map((m) => ({
-        id: m.value as string,
-        label: typeof m.label === 'string' && m.label ? m.label : (m.value as string),
-        note: typeof m.description === 'string' ? m.description : undefined,
-      }))
-  } catch {
-    return []
-  }
-}
-
 export const claudeEngine: Engine = {
   id: 'claude',
-  defaultModel: 'opus',
+  // Empty resolves to the newest Opus in the catalog; see resolveClaudeModel.
+  defaultModel: '',
 
-  async models(): Promise<ModelOption[]> {
-    const extra = await extraModels()
-    const seen = new Set<string>()
-    return [...BUILT_IN, ...extra, CLI_DEFAULT].filter((model) => {
-      if (seen.has(model.id)) return false
-      seen.add(model.id)
-      return true
-    })
-  },
+  models: claudeModels,
 
   async status(): Promise<EngineStatus> {
     const version = await probeVersion(BIN)
@@ -111,20 +57,26 @@ export const claudeEngine: Engine = {
     const { code, stdout, stderr } = await runCli(
       BIN,
       [
-        '-p', streamSummary
-          ? `${prompt}\n\nBefore calling StructuredOutput, write a concise user-facing summary of the evidence and page-fit decision you made. Do not reveal private chain-of-thought.`
-          : prompt,
+        // The prompt itself goes through stdin; see runCli.
+        '-p',
         '--output-format', 'stream-json',
         '--include-partial-messages',
         '--verbose',
         '--json-schema', JSON.stringify(schema),
-        ...modelArgs(model),
+        ...modelArgs(await resolveClaudeModel(model ?? '')),
         // Analysis only. The app writes every file itself; the model never does.
         '--permission-mode', 'plan',
         '--add-dir', cwd ?? PATHS.root,
         ...(threadId ? (existingThread ? ['--resume', threadId] : ['--session-id', threadId]) : []),
       ],
-      { cwd: cwd ?? PATHS.root, signal, onStdout: parser.push },
+      {
+        cwd: cwd ?? PATHS.root,
+        signal,
+        input: streamSummary
+          ? `${prompt}\n\nBefore calling StructuredOutput, write a concise user-facing summary of the evidence and page-fit decision you made. Do not reveal private chain-of-thought.`
+          : prompt,
+        onStdout: parser.push,
+      },
     )
     parser.flush()
 

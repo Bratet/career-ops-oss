@@ -2,6 +2,7 @@ import { readFile } from 'fs/promises'
 import { parse } from 'yaml'
 import { CANDIDATE } from './candidate'
 import { PATHS } from './paths'
+import { checkText } from './textRules'
 
 /**
  * The hard rules, in TypeScript.
@@ -22,16 +23,6 @@ export interface Failure {
   where: string
   why: string
 }
-
-/**
- * Names that must never appear on a generated resume/cover letter, in any
- * language, in any role — e.g. a past employer's confidential client names.
- * Configured per candidate in config/candidate.json; empty by default.
- */
-const FORBIDDEN = CANDIDATE.confidentialTerms
-
-/** [text](url) is a markdown link and fine. [anything else] is an unfilled placeholder. */
-const PLACEHOLDER_RE = /\[[^\]\n]*\](?!\()/g
 
 interface StringHit { path: string; value: string }
 
@@ -107,23 +98,7 @@ export async function checkContent(text: string, mode: Mode): Promise<ContentRes
   const strings: StringHit[] = []
   walk(doc.cv ?? {}, 'cv', strings, failures)
 
-  for (const { path, value } of strings) {
-    for (const name of FORBIDDEN) {
-      if (new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(value)) {
-        failures.push({ kind: 'forbidden-name', where: path, why: `forbidden name "${name}" appears` })
-      }
-    }
-    if (value.includes('—')) {
-      failures.push({
-        kind: 'em-dash',
-        where: path,
-        why: 'em dash present; strongest AI tell to a recruiter',
-      })
-    }
-    for (const m of value.matchAll(PLACEHOLDER_RE)) {
-      failures.push({ kind: 'placeholder', where: path, why: `bracketed placeholder ${JSON.stringify(m[0])}` })
-    }
-  }
+  for (const { path, value } of strings) failures.push(...checkText(value, path, CANDIDATE.confidentialTerms))
 
   // Master and tailored share one design spec, so both are held to it. Without
   // this the profile preview silently rendered the master's own drifted block and

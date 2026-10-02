@@ -2,11 +2,13 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import type { EditorChatTurn } from '@/lib/chatPersistence'
+import { LEARNABLE_SKILLS, type LearnableSkill } from '@/lib/skills/learning'
+
+interface LearnTurn { role: 'user' | 'assistant'; content: string; proposal?: { status: 'pending' | 'accepted' | 'rejected' } }
 
 interface Proposal { markdown: string; before: string; summary: string; profileNotes?: string; expectedVersion: number }
 
-export function LearnFromChat({ turns, disabled, skillId = 'tailor-cv', onUpdateProfile }: { turns: EditorChatTurn[]; disabled: boolean; skillId?: 'tailor-cv' | 'analyze-job' | 'profile-fit'; onUpdateProfile?: () => void }) {
+export function LearnFromChat({ turns, disabled, skillId = 'tailor-cv', onUpdateProfile }: { turns: LearnTurn[]; disabled: boolean; skillId?: LearnableSkill; onUpdateProfile?: () => void }) {
   const [busy, setBusy] = useState(false)
   const [proposal, setProposal] = useState<Proposal | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -42,7 +44,7 @@ export function LearnFromChat({ turns, disabled, skillId = 'tailor-cv', onUpdate
   return <div className="border-b border-[var(--color-border)] px-4 py-2 text-xs">
     <button type="button" onClick={() => void propose()} disabled={disabled || busy || turns.length < 2 || !!proposal}
       className="rounded-md px-2 py-1.5 text-[var(--color-accent)] hover:bg-[var(--color-accent-soft)] focus-visible:outline focus-visible:outline-2 disabled:opacity-40">
-      {busy ? 'Working on the skill update…' : skillId === 'tailor-cv' ? 'Improve tailoring skill from this chat' : skillId === 'analyze-job' ? 'Improve job-analysis skill from this chat' : 'Improve fit-analysis skill from this chat'}
+      {busy ? 'Working on the skill update…' : `Improve ${LEARNABLE_SKILLS[skillId]} skill from this chat`}
     </button>
     {onUpdateProfile ? <button type="button" onClick={onUpdateProfile} disabled={disabled || busy || turns.length < 2}
       className="rounded-md px-2 py-1.5 text-[var(--color-accent)] hover:bg-[var(--color-accent-soft)] focus-visible:outline focus-visible:outline-2 disabled:opacity-40">Update profile from this chat</button> : null}

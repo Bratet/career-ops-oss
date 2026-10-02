@@ -7,7 +7,7 @@ const original = process.cwd()
 const root = await mkdtemp(join(tmpdir(), 'career-ops-general-test-'))
 try {
   process.chdir(root)
-  const { APP_FILES, PATHS } = await import('../src/lib/paths')
+  const { PATHS, APP_FILES } = await import('../src/lib/paths')
   await mkdir(PATHS.applications, { recursive: true })
   await mkdir(PATHS.state, { recursive: true })
   await mkdir(dirname(PATHS.ownCv.en), { recursive: true })

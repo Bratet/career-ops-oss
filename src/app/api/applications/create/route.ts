@@ -8,6 +8,7 @@ import { seedYaml, requirementMap, jdMarkdown } from '@/lib/tailoring/seed'
 import { jdAnalysisParser } from '@/lib/tailoring/jd'
 import { attachSkillRunToApplication } from '@/lib/skills/runs'
 import { createWorkspace } from '@/lib/workspaces'
+import { findExistingApplications, isBlocking } from '@/lib/duplicates'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -20,7 +21,7 @@ export const dynamic = 'force-dynamic'
  * folder that was never created is a dangling reference.
  */
 export async function POST(req: Request) {
-  const body = (await req.json()) as { analysis: unknown; jd: string; url?: string; runId?: string }
+  const body = (await req.json()) as { analysis: unknown; jd: string; url?: string; runId?: string; allowDuplicate?: boolean }
 
   const parsed = jdAnalysisParser.safeParse(body.analysis)
   if (!parsed.success) return NextResponse.json({ error: 'invalid analysis payload' }, { status: 400 })
@@ -29,6 +30,12 @@ export async function POST(req: Request) {
   }
 
   const analysis = parsed.data
+  if (body.allowDuplicate !== true) {
+    const duplicates = (await findExistingApplications({ company: analysis.company, role: analysis.role, jd: body.jd })).filter(isBlocking)
+    if (duplicates.length) {
+      return NextResponse.json({ error: 'this job looks like one you already have an application for', duplicates }, { status: 409 })
+    }
+  }
   const date = new Date().toISOString().slice(0, 10)
   const slug = slugify(analysis.company) || 'application'
   const folder = `${slug}-${date}`

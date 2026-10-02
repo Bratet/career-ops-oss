@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Visa Badge settings</title>
+    <meta name="manifest.open_in_tab" content="true" />
+    <style>
+      body { font: 14px/1.5 system-ui, sans-serif; max-width: 520px; margin: 32px auto; padding: 0 16px; color: #111; background: #fff; }
+      @media (prefers-color-scheme: dark) { body { color: #eee; background: #1b1b1b; } input { background: #2a2a2a; color: inherit; } }
+      h1 { font-size: 18px; }
+      input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #8886; border-radius: 6px; font: inherit; }
+      .row { display: flex; gap: 8px; margin-top: 10px; }
+      button { padding: 6px 14px; border-radius: 6px; border: 1px solid #8886; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+      #status { margin-top: 12px; min-height: 1.5em; font: 12px/1.5 ui-monospace, monospace; white-space: pre-wrap; }
+      small { opacity: 0.7; }
+    </style>
+  </head>
+  <body>
+    <h1>Visa Badge: Jev</h1>
+    <p>Paste your OpenRouter API key to classify postings with Jev (typesafe/jev-1.13): visa sponsorship, and whether remote jobs accept people outside Europe. Each posting is classified once and cached for two weeks.</p>
+    <input id="key" type="password" placeholder="sk-or-..." autocomplete="off" />
+    <div class="row">
+      <button id="save">Save</button>
+      <button id="test">Test</button>
+      <button id="clear">Remove key</button>
+    </div>
+    <pre id="status"></pre>
+    <p><small>Stored only in this browser (chrome.storage.local). Get a key at openrouter.ai/settings/keys. Jev costs about $0.00005 per posting.</small></p>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

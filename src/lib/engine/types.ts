@@ -7,20 +7,11 @@ export interface EngineStatus {
   reason?: string
 }
 
-/**
- * A model the engine's CLI will accept behind `--model`. The empty id means
- * "pass no flag" — whatever the CLI is configured to use itself.
- */
+/** A model the engine's CLI will accept behind `--model`. */
 export interface ModelOption {
   id: string
   label: string
   note?: string
-}
-
-export const CLI_DEFAULT: ModelOption = {
-  id: '',
-  label: 'CLI default',
-  note: 'Whatever the CLI is already configured to use',
 }
 
 /** `--model <id>`, or nothing at all for the CLI's own default. */

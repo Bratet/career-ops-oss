@@ -10,6 +10,7 @@ import type { ProfileFitReport } from './profileFit'
 import { withTailoredDesign } from './tailoring/seed'
 import { generalApplicationSchema, type GeneralApplication } from './generalApplication'
 import type { OutreachDrafts } from './outreach'
+import type { CoverLetter } from './coverLetter'
 
 const KEY = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/
 const VERSION = 1
@@ -34,6 +35,8 @@ export interface WorkspaceProposal {
 
 export interface ApplicationWorkspace {
   outreach?: OutreachDrafts
+  /** The structured cover letter draft; older records only have outreach['cover-letter'] text. */
+  coverLetter?: CoverLetter
   version: 1
   general?: boolean
   generalDetails?: GeneralApplication | null

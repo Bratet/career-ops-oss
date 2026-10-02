@@ -1,15 +1,11 @@
-import { readFile } from 'fs/promises'
-import { homedir } from 'os'
-import { join } from 'path'
 import { PATHS } from '../paths'
 import { probeVersion } from './spawn'
 import { runCodexAppServer } from './codexAppServer'
+import { codexModels, resolveCodexModel } from './codexModels'
 import {
-  CLI_DEFAULT,
   EngineError,
   type Engine,
   type EngineStatus,
-  type ModelOption,
   type RunOptions,
 } from './types'
 
@@ -21,38 +17,13 @@ import {
  */
 
 const BIN = process.env.CAREER_OPS_CODEX_BIN || 'codex'
-const CODEX_HOME = process.env.CODEX_HOME || join(homedir(), '.codex')
-
-/**
- * Codex refreshes `models_cache.json` itself, so the catalog tracks the account
- * rather than a list hardcoded here that would go stale. `visibility` is the
- * CLI's own pick-list flag — hidden entries are internal.
- */
-async function cachedModels(): Promise<ModelOption[]> {
-  try {
-    const cache = JSON.parse(await readFile(join(CODEX_HOME, 'models_cache.json'), 'utf-8'))
-    if (!Array.isArray(cache?.models)) return []
-    return cache.models
-      .filter((m: Record<string, unknown>) => typeof m?.slug === 'string' && m.slug && m.visibility !== 'hide')
-      .sort((a: Record<string, number>, b: Record<string, number>) => (a.priority ?? 99) - (b.priority ?? 99))
-      .map((m: Record<string, string>) => ({
-        id: m.slug,
-        label: m.display_name || m.slug,
-        note: m.description,
-      }))
-  } catch {
-    return []
-  }
-}
 
 export const codexEngine: Engine = {
   id: 'codex',
-  // Codex has always run on whatever `~/.codex/config.toml` names; keep that.
+  // Empty resolves to the top of the catalog; see resolveCodexModel.
   defaultModel: '',
 
-  async models(): Promise<ModelOption[]> {
-    return [CLI_DEFAULT, ...(await cachedModels())]
-  },
+  models: codexModels,
 
   async status(): Promise<EngineStatus> {
     const version = await probeVersion(BIN)
@@ -61,7 +32,8 @@ export const codexEngine: Engine = {
       : { id: 'codex', ok: false, reason: `\`${BIN}\` not found on PATH. Install Codex CLI and run \`codex login\`.` }
   },
 
-  async runStructured<T>({ prompt, schema, cwd, signal, onEvent, model, thread }: RunOptions): Promise<T> {
+  async runStructured<T>({ prompt, schema, cwd, signal, onEvent, model: chosen, thread }: RunOptions): Promise<T> {
+    const model = await resolveCodexModel(chosen ?? '')
     onEvent?.({ type: 'start', message: `Asking Codex${model ? ` (${model})` : ''}…` })
 
     const result = await runCodexAppServer({

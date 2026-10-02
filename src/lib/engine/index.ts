@@ -1,6 +1,8 @@
 import { readFile, writeFile, rename } from 'fs/promises'
 import { PATHS } from '../paths'
 import { claudeEngine } from './claude'
+import { resolveClaudeModel } from './claudeModels'
+import { resolveCodexModel } from './codexModels'
 import { codexEngine } from './codex'
 import type { Engine, EngineId, EngineStatus, ModelOption } from './types'
 
@@ -104,12 +106,18 @@ export function modelFor(choice: FeatureEngineSettings, engine: EngineId): strin
   return choice.models[engine] ?? ENGINES[engine].defaultModel
 }
 
+/** modelFor, with the empty default and Claude family aliases pinned to a real id. */
+export async function resolvedModelFor(choice: FeatureEngineSettings, engine: EngineId): Promise<string> {
+  const model = modelFor(choice, engine)
+  return engine === 'claude' ? resolveClaudeModel(model) : resolveCodexModel(model)
+}
+
 /** Resolve exactly one task's configured CLI and model. */
 export async function getEngine(feature: AiFeature): Promise<Engine> {
   const settings = await readSettings()
   const choice = settings.features[feature]
   const base = ENGINES[choice.engine]
-  const model = modelFor(choice, choice.engine)
+  const model = await resolvedModelFor(choice, choice.engine)
   return {
     ...base,
     runStructured: (opts) => base.runStructured({ ...opts, model: opts.model ?? model }),

@@ -149,17 +149,7 @@ export interface Stats {
   byStatus: { status: string; count: number }[]
   byDay: { date: string; count: number }[]
   scoreBuckets: { bucket: string; count: number }[]
-  thisWeek: number
-  lastWeek: number
   perDayRecent: number
-}
-
-function weekKey(offset: number, today: Date): [string, string] {
-  const end = new Date(today)
-  end.setDate(end.getDate() - offset * 7)
-  const start = new Date(end)
-  start.setDate(start.getDate() - 6)
-  return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)]
 }
 
 export async function computeStats(today = new Date()): Promise<Stats> {
@@ -180,10 +170,6 @@ export async function computeStats(today = new Date()): Promise<Stats> {
   const bucketCounts = new Array(buckets.length).fill(0)
   for (const s of scores) bucketCounts[bucketOf(s)]++
 
-  const [tws, twe] = weekKey(0, today)
-  const [lws, lwe] = weekKey(1, today)
-  const inRange = (d: string, a: string, b: string) => d >= a && d <= b
-
   const sent = rows.filter((r) => SENT_STATUSES.includes(r.status)).length
   const responded = rows.filter((r) => RESPONDED_STATUSES.includes(r.status)).length
 
@@ -202,8 +188,6 @@ export async function computeStats(today = new Date()): Promise<Stats> {
     byStatus: [...counts.entries()].map(([status, count]) => ({ status, count })).sort((a, b) => b.count - a.count),
     byDay: sortedDays.map(([date, count]) => ({ date, count })),
     scoreBuckets: buckets.map((bucket, i) => ({ bucket, count: bucketCounts[i] })),
-    thisWeek: rows.filter((r) => inRange(r.date, tws, twe)).length,
-    lastWeek: rows.filter((r) => inRange(r.date, lws, lwe)).length,
     perDayRecent: rows.length / span,
   }
 }

@@ -3,9 +3,11 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Lock } from 'lucide-react'
+import { Lock } from 'lucide-react'
 import type { ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import type { Application } from '@/lib/applications'
+import { coverLetterFromWorkspace, senderFromResume } from '@/lib/coverLetter'
+import type { PostingContact } from '@/lib/postingContact'
 import type { JdAnalysis } from '@/lib/tailoring/jd'
 import type { ApplicationWorkspace, WorkspaceProposal } from '@/lib/workspaces'
 import type { Op } from '@/lib/tailoring/ops'
@@ -15,6 +17,8 @@ import type { EditorApi } from '@/components/EditorPane'
 import { Badge, Card, CardHeader, Empty, Spinner, statusTone } from '@/components/ui/primitives'
 import { YamlEditor } from '@/components/YamlEditor'
 import { PdfPreview } from '@/components/PdfPreview'
+import { ErrorNotice } from '@/components/ErrorNotice'
+import { FinalizeStatus, type FinalizedState } from '@/components/FinalizeStatus'
 import { readNdjson } from '@/lib/ndjson'
 import { STATUSES } from '@/lib/statuses'
 import { findPathOffset } from '@/lib/yamlPath'
@@ -31,16 +35,39 @@ const NEXT_STEPS: readonly NextStep[] = ['status', 'cover-letter', 'email', 'lin
 type SaveState = 'saved' | 'saving' | 'error'
 
 /** Background jobs (fit analysis, a concurrent tailoring run) bump the workspace revision on the server before this tab's own request resolves. */
+const DRAFT_CONFLICT = 'This resume was changed somewhere else, in another tab or by Claude. Your edits here are not saved. Reload to continue from the latest version.'
+
 function isRevisionConflict(message: string): boolean {
   return message.startsWith('workspace changed: expected revision')
 }
 
-export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, eligibility }: {
+/**
+ * The server props lag behind a finalize until router.refresh lands, and a
+ * stale copy says there is no PDF. The finalize response already names it.
+ */
+function withFinalizedPdf(app: Application, pdfName: string | null): Application {
+  if (!pdfName || !app.folder || app.folder.has.pdf) return app
+  return {
+    ...app,
+    folder: {
+      ...app.folder,
+      has: { ...app.folder.has, pdf: true },
+      docs: [...app.folder.docs, { key: 'pdf', name: pdfName, size: 0 }],
+    },
+  }
+}
+
+export function ApplicationWorkspaceView({ app: serverApp, initialWorkspace, analysis, eligibility, contact, finalized: finalizedAtLoad }: {
   app: Application
+  contact: PostingContact
+  finalized: FinalizedState
   eligibility: EligibilityIssue[]
   initialWorkspace: ApplicationWorkspace
   analysis: JdAnalysis | null
 }) {
+  const [finalizedPdf, setFinalizedPdf] = useState<string | null>(null)
+  const [resumeFinalized, setResumeFinalized] = useState(finalizedAtLoad.resume)
+  const app = withFinalizedPdf(serverApp, finalizedPdf)
   const router = useRouter()
   const params = useSearchParams()
   const requested = params.get('tab')
@@ -55,6 +82,7 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
   const [tailoring, setTailoring] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [draftConflict, setDraftConflict] = useState(false)
   const [editorReviewPending, setEditorReviewPending] = useState(false)
   const [editorPaneTab, setEditorPaneTab] = useState<'ai' | 'yaml'>('ai')
   const [status, setStatus] = useState(app.row?.status ?? '')
@@ -65,6 +93,31 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
   const editorCardRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { revision.current = workspace.revision }, [workspace.revision])
+
+  // Server props can be older than what this page already saved: a remount
+  // (hot reload, back/forward cache) rebuilds state from them, and the chat
+  // would then send that stale draft to the agent. Adopt the saved workspace
+  // whenever it is newer, unless there are unsaved local edits to keep.
+  const latestDraft = useRef(draft)
+  latestDraft.current = draft
+  function adoptNewerWorkspace(next: ApplicationWorkspace) {
+    if (next.revision <= revision.current || latestDraft.current !== savedDraft.current) return
+    revision.current = next.revision
+    savedDraft.current = next.draftYaml
+    setWorkspace(next)
+    setDraft(next.draftYaml)
+  }
+  useEffect(() => {
+    let cancelled = false
+    void fetch(`/api/applications/${encodeURIComponent(serverApp.key)}/workspace`, { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => { if (!cancelled && data?.workspace) adoptNewerWorkspace(data.workspace as ApplicationWorkspace) })
+      .catch(() => { /* the props remain a valid starting point */ })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverApp.key])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => adoptNewerWorkspace(initialWorkspace), [initialWorkspace])
 
   // Mirror the current step in the URL so reloads and shared links land in the same place.
   useEffect(() => {
@@ -90,19 +143,28 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
     return data.workspace as ApplicationWorkspace
   }
 
-  /** Retry once against the latest revision instead of surfacing a raw conflict to the user. */
+  /**
+   * Retry once against the latest revision, but only when the other write left
+   * the resume draft alone (a fit run, a cover letter save). If the draft itself
+   * moved on, retrying would overwrite it with this tab's older copy, so stop
+   * and ask for a reload instead.
+   */
   async function withRevisionRetry<T>(operation: () => Promise<T>): Promise<T> {
     try {
       return await operation()
     } catch (error) {
       if (!isRevisionConflict((error as Error).message)) throw error
-      await refreshWorkspaceRevision()
+      const latest = await refreshWorkspaceRevision()
+      if (latest.draftYaml !== savedDraft.current) {
+        setDraftConflict(true)
+        throw new Error(DRAFT_CONFLICT)
+      }
       return await operation()
     }
   }
 
   useEffect(() => {
-    if (draft === savedDraft.current || editorReviewPending || tailoring || workspace.pendingProposal) return
+    if (draft === savedDraft.current || draftConflict || editorReviewPending || tailoring || workspace.pendingProposal) return
     setSaveState('saving')
     const timer = window.setTimeout(async () => {
       try {
@@ -125,7 +187,7 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
       }
     }, 650)
     return () => window.clearTimeout(timer)
-  }, [app.key, draft, editorReviewPending, tailoring, workspace.pendingProposal])
+  }, [app.key, draft, draftConflict, editorReviewPending, tailoring, workspace.pendingProposal])
 
   useEffect(() => {
     if (tab !== 'resume' || !draft.trim()) return
@@ -330,7 +392,6 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
       })
       savedDraft.current = saved.draftYaml
       setDraft(saved.draftYaml); setWorkspace(saved); revision.current = saved.revision
-      if (action === 'accept') goTo('next')
       router.refresh()
     } catch (reason) { setError((reason as Error).message) } finally { setBusy(false) }
   }
@@ -345,9 +406,12 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
         })
         const data = await response.json()
         if (!response.ok) throw new Error(data.error ?? 'finalize failed')
-        return data.workspace as ApplicationWorkspace
+        return data as { workspace: ApplicationWorkspace; finalized: { pdfName: string } }
       })
-      setWorkspace(result); revision.current = result.revision
+      setWorkspace(result.workspace); revision.current = result.workspace.revision
+      setFinalizedPdf(result.finalized.pdfName)
+      // The server finalized its saved draft, which is this tab's saved draft.
+      setResumeFinalized({ at: new Date().toISOString(), yaml: savedDraft.current })
       goTo('next')
       router.refresh()
     } catch (reason) { setError((reason as Error).message) } finally { setBusy(false) }
@@ -371,12 +435,15 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
     setSaveState('saving')
     setError(null)
     try {
-      const response = await fetch(`/api/applications/${encodeURIComponent(app.key)}/workspace`, {
-        method: 'PUT', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ revision: revision.current, draftYaml: yaml }),
+      const data = await withRevisionRetry(async () => {
+        const response = await fetch(`/api/applications/${encodeURIComponent(app.key)}/workspace`, {
+          method: 'PUT', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ revision: revision.current, draftYaml: yaml }),
+        })
+        const body = await response.json()
+        if (!response.ok) throw new Error(body.error ?? 'save failed')
+        return body as { workspace: ApplicationWorkspace }
       })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error ?? 'save failed')
       savedDraft.current = yaml
       revision.current = data.workspace.revision
       setDraft(yaml)
@@ -423,12 +490,11 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
     { value: 'next', label: 'Apply & follow up', short: 'next steps', description: finalized ? 'Track your application and prepare messages' : 'Unlocks once your resume is finalized', locked: !finalized },
   ]
   const current = steps.findIndex((step) => step.value === tab)
-  const previous = steps[current - 1]
   const following = steps[current + 1]
   const hint = tab === 'overview'
-    ? 'Work through the details with AI below. When you’re ready, continue to your resume. You can return here anytime.'
+    ? 'Work through the details with AI below. When you’re ready, continue to Resume & AI above. You can return here anytime.'
     : tab === 'resume'
-      ? finalized ? 'Your resume is finalized. Keep refining it and finalize again, or continue to your next steps.' : workspace.general ? 'Review changes with AI, then finalize your resume to unlock next steps.' : 'Build on your fit analysis and clarifications, then finalize your resume to unlock next steps.'
+      ? finalized ? 'Your resume is finalized. Keep refining it and finalize again, or continue to Apply & follow up above.' : workspace.general ? 'Review changes with AI, then finalize your resume to unlock next steps.' : 'Build on your fit analysis and clarifications, then finalize your resume to unlock next steps.'
       : 'Pick one task at a time. Your drafts and notes are saved with this application.'
 
   return (
@@ -442,30 +508,36 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
           {app.folder ? <Link href={`/runs?applicationKey=${encodeURIComponent(app.key)}`} className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">AI runs</Link> : null}
         </div>
       </header>
-      {error ? <Card className="border-[var(--color-bad-soft)]"><p className="px-4 py-2 text-xs text-[var(--color-bad)]">{error}</p></Card> : null}
+      {error ? <Card className="overflow-hidden border-[var(--color-bad-soft)]"><ErrorNotice error={error} onDismiss={() => setError(null)} /></Card> : null}
       <nav aria-label="Application workflow">
         <ol className="application-flow">
           {steps.map(({ value, label, description, locked }, index) => (
-            <li key={value}>
+            <li key={value} data-next={value === following?.value && !locked ? '' : undefined}>
               <button type="button" onClick={() => goTo(value)} aria-current={tab === value ? 'step' : undefined} className="application-flow-step">
                 <span className="application-flow-number" aria-hidden="true">{locked ? <Lock size={16} /> : index + 1}</span>
                 <span className="min-w-0"><span className="block text-sm font-semibold">{label}</span><span className="mt-1 block text-xs leading-relaxed text-[var(--color-muted)]">{description}</span></span>
+                {value === following?.value && !locked ? <span className="sr-only">(next step)</span> : null}
               </button>
             </li>
           ))}
         </ol>
       </nav>
-      <div className="flex flex-wrap items-center gap-3">
-        {previous ? <button type="button" onClick={() => goTo(previous.value)} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[var(--color-border)] px-4 py-2 text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-surface-2)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-accent)]"><ArrowLeft size={16} aria-hidden="true" /> Back to {previous.short}</button> : null}
-        <p className="min-w-48 max-w-2xl flex-1 text-xs leading-relaxed text-[var(--color-muted)]">{hint}</p>
-        {following && !(following.locked && tab === 'resume') ? <button type="button" onClick={() => goTo(following.value)} className="ml-auto inline-flex min-h-10 items-center gap-2 rounded-md bg-[var(--color-accent)] px-4 py-2 text-xs font-semibold text-[var(--color-bg)] hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-accent)]">Continue to {following.short} <ArrowRight size={16} aria-hidden="true" /></button> : null}
-      </div>
+      <p className="max-w-2xl text-xs leading-relaxed text-[var(--color-muted)]">{hint}</p>
 
       {tab === 'next' ? <NextStepsPanel
         app={app}
         status={status}
         onStatusSaved={(next) => { setStatus(next); router.refresh() }}
         initialDrafts={workspace.outreach ?? {}}
+        savedCoverLetter={workspace.coverLetter ?? null}
+        initialCoverLetter={coverLetterFromWorkspace(workspace.coverLetter, workspace.outreach?.['cover-letter'], {
+          companyName: app.row?.company ?? '',
+          paper: senderFromResume(workspace.draftYaml).paper,
+          recipientName: contact.name ?? '',
+          salutation: contact.firstName ? `Dear ${contact.firstName},` : '',
+        })}
+        contact={contact}
+        letterFinalized={finalizedAtLoad.letter}
         step={nextStep}
         onStep={(step) => { setNextStep(step); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
         onGoToResume={() => goTo('resume')}
@@ -475,7 +547,8 @@ export function ApplicationWorkspaceView({ app, initialWorkspace, analysis, elig
 
       <div className={cn('space-y-3', tab === 'next' && 'hidden')}>
         {tab === 'resume' ? <>
-        <div className="flex flex-wrap items-center gap-2"><span className={`text-xs ${saveState === 'error' ? 'text-[var(--color-bad)]' : 'text-[var(--color-faint)]'}`}>{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : 'Autosave error'}</span>{rendering ? <span className="flex items-center gap-1 text-xs text-[var(--color-faint)]"><Spinner /> Rendering…</span> : preview.pages ? <Badge tone={preview.pages === 1 && !preview.failures.length ? 'ok' : 'warn'}>{preview.pages} page · {preview.fill ?? '—'}% fill</Badge> : null}{reviewPending ? <Badge tone="warn">Review AI changes</Badge> : null}{located ? <span className="text-xs text-[var(--color-accent)]">{located}</span> : null}<div className="ml-auto flex items-center gap-2">{app.folder?.has.pdf ? <><a href={`/api/applications/${encodeURIComponent(app.key)}/file/${encodeURIComponent(app.folder.docs.find((doc) => doc.key === 'pdf')?.name ?? 'resume.pdf')}`} target="_blank" rel="noreferrer" className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">Open PDF</a><button onClick={() => void locatePdf(true)} className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">Reveal in Finder</button><button onClick={() => void locatePdf(false)} className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">Copy path</button></> : null}<button disabled={busy || reviewPending || saveState !== 'saved'} onClick={() => void finalize()} className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-[var(--color-bg)] disabled:opacity-40">Finalize resume</button></div></div>
+        <div className="flex flex-wrap items-center gap-2"><FinalizeStatus saveState={saveState} pendingReview={reviewPending} finalized={resumeFinalized} upToDate={!!resumeFinalized && resumeFinalized.yaml === draft} />{rendering ? <span className="flex items-center gap-1 text-xs text-[var(--color-faint)]"><Spinner /> Rendering…</span> : preview.pages ? <Badge tone={preview.pages === 1 && !preview.failures.length ? 'ok' : 'warn'}>{preview.pages} page · {preview.fill ?? '—'}% fill</Badge> : null}{located ? <span className="text-xs text-[var(--color-accent)]">{located}</span> : null}<div className="ml-auto flex items-center gap-2">{app.folder?.has.pdf ? <><a href={`/api/applications/${encodeURIComponent(app.key)}/file/${encodeURIComponent(app.folder.docs.find((doc) => doc.key === 'pdf')?.name ?? '')}`} target="_blank" rel="noreferrer" className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">Open PDF</a><button onClick={() => void locatePdf(true)} className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">Reveal in Finder</button><button onClick={() => void locatePdf(false)} className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)]">Copy path</button></> : null}<button disabled={busy || draftConflict || reviewPending || saveState !== 'saved'} onClick={() => void finalize()} className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-[var(--color-bg)] disabled:opacity-40">Finalize resume</button></div></div>
+        {draftConflict ? <Card className="flex flex-wrap items-center gap-3 border-[var(--color-bad-soft)] px-4 py-3"><p role="alert" className="flex-1 text-xs text-[var(--color-bad)]">{DRAFT_CONFLICT}</p><button type="button" onClick={() => window.location.reload()} className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-[var(--color-bg)]">Reload</button></Card> : null}
         {preview.failures.length ? <Card className="border-[var(--color-bad-soft)]"><ul className="list-disc px-8 py-2 text-xs text-[var(--color-bad)]">{preview.failures.map((failure, index) => <li key={index}>{failure.why}</li>)}</ul></Card> : null}
         </> : null}
         <div className="grid min-h-[70vh] items-start gap-5 lg:grid-cols-2">
@@ -555,11 +628,11 @@ function TailoringProposal({ proposal, busy, currentPages, currentFill, onToggle
         <div className="min-w-48 flex-1">
           <p className="text-xs font-medium">Tailoring proposal · {kept}/{proposal.ops.length} changes selected</p>
           <p className="mt-0.5 text-[10px] text-[var(--color-muted)]">
-            {currentPages ?? proposal.render.pages ?? '—'} page · {currentFill ?? proposal.render.fill ?? '—'}% fill · Nothing is finalized until you accept
+            {currentPages ?? proposal.render.pages ?? '—'} page · {currentFill ?? proposal.render.fill ?? '—'}% fill · Accepting keeps these changes in your draft; finalize the resume when you’re ready
           </p>
         </div>
         <button onClick={onReject} disabled={busy} className="rounded-md border border-[var(--color-bad)] px-2.5 py-1 text-[11px] text-[var(--color-bad)] disabled:opacity-40">Reject all</button>
-        <button onClick={onAccept} disabled={busy || kept === 0} className="rounded-md bg-[var(--color-ok)] px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-40">Accept & finalize</button>
+        <button onClick={onAccept} disabled={busy || kept === 0} className="rounded-md bg-[var(--color-ok)] px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-40">Accept changes</button>
       </div>
       {!individuallyReviewable ? <p className="border-b border-[var(--color-border)] px-3 py-2 text-[10px] text-[var(--color-faint)]">This older proposal can be accepted or rejected as a whole.</p> : null}
       <ul className="max-h-64 divide-y divide-[var(--color-border)] overflow-y-auto">

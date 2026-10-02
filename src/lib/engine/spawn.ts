@@ -13,31 +13,37 @@ export interface SpawnResult {
 export function runCli(
   bin: string,
   args: string[],
-  opts: { cwd?: string; signal?: AbortSignal; timeoutMs?: number; onStdout?: (chunk: string) => void } = {},
+  opts: { cwd?: string; signal?: AbortSignal; timeoutMs?: number; input?: string; onStdout?: (chunk: string) => void } = {},
 ): Promise<SpawnResult> {
   // A tailoring pass on a large prompt genuinely runs for several minutes, and a
   // SIGKILL mid-answer costs the whole call. The ceiling is here to catch a hung
   // CLI, not to bound a slow one.
-  const { cwd, signal, timeoutMs = 900_000, onStdout } = opts
+  const { cwd, signal, timeoutMs = 900_000, input, onStdout } = opts
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, {
       cwd,
       signal,
       env: process.env,
-      // stdin MUST be closed, not an open pipe. `codex exec` reads extra prompt
-      // text from stdin and blocks forever waiting for EOF if one is left open,
-      // which looks exactly like the model hanging.
-      stdio: ['ignore', 'pipe', 'pipe'],
+      // stdin MUST reach EOF, never stay an open pipe. `codex exec` reads extra
+      // prompt text from stdin and blocks forever waiting for EOF if one is left
+      // open, which looks exactly like the model hanging. Large prompts go through
+      // stdin rather than argv: Windows caps a command line at ~32K characters and
+      // fails the spawn with ENAMETOOLONG.
+      stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
     })
+    if (input !== undefined) {
+      child.stdin!.on('error', () => { /* surfaced through the exit code */ })
+      child.stdin!.end(input)
+    }
     let stdout = '', stderr = ''
     const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs)
 
-    child.stdout.on('data', (d) => {
+    child.stdout!.on('data', (d) => {
       const s = String(d)
       stdout += s
       onStdout?.(s)
     })
-    child.stderr.on('data', (d) => (stderr += String(d)))
+    child.stderr!.on('data', (d) => (stderr += String(d)))
     child.on('error', (e) => { clearTimeout(timer); reject(e) })
     child.on('close', (code) => { clearTimeout(timer); resolve({ code, stdout, stderr }) })
   })

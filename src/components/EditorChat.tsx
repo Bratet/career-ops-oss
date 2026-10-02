@@ -10,6 +10,7 @@ import { readNdjson } from '@/lib/ndjson'
 import type { Mode } from '@/lib/validate'
 import { cn } from '@/lib/utils'
 import { PROFILE_UPDATE_REQUEST } from '@/lib/skills/learning'
+import { ErrorNotice } from './ErrorNotice'
 import { LearnFromChat } from './LearnFromChat'
 import { FeatureEnginePicker } from './FeatureEnginePicker'
 import { chatSkillForMessage } from '@/lib/chatSkills'
@@ -74,6 +75,8 @@ export function EditorChat({
   const sessionRef = useRef('')
   const autoStartedRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
+  /** Re-sends the request that just failed, from the conversation as it was before it. */
+  const retryRef = useRef<(() => void) | null>(null)
   const pendingProposal = turns.some((turn) => turn.proposal?.status === 'pending')
   const latestResumeReviewIndex = turns.reduce((found, turn, index) => turn.review ? index : found, -1)
   const latestResumeReview = latestResumeReviewIndex >= 0 ? turns[latestResumeReviewIndex].review : undefined
@@ -210,6 +213,7 @@ export function EditorChat({
     setLiveReasoning('')
     setLiveSkillEvents([])
     setError(null)
+    retryRef.current = null
     const controller = new AbortController()
     abortRef.current = controller
     let streamed = ''
@@ -365,6 +369,7 @@ export function EditorChat({
         storeEditorChat(activeStorageKey, { sessionId: activeSessionId, turns: nextTurns, draft: activeDraft, reviewMode: resumeReviewMode })
       } else {
         setTurns(history)
+        retryRef.current = () => { setError(null); void send(userMessage, earlierTurns, startResumeReview) }
         setError((reason as Error).message)
         setMessage(startResumeReview ? activeDraft : userMessage)
         storeEditorChat(activeStorageKey, { sessionId: activeSessionId, turns: history, draft: startResumeReview ? activeDraft : userMessage, reviewMode: resumeReviewMode })
@@ -567,7 +572,7 @@ export function EditorChat({
         <div ref={endRef} />
       </div>
 
-      {error ? <p className="border-t border-[var(--color-bad-soft)] bg-[var(--color-bad-soft)] px-3 py-2 text-xs text-[var(--color-bad)]">{error}</p> : null}
+      {error ? <ErrorNotice error={error} className="border-t border-[var(--color-bad-soft)]" onRetry={retryRef.current && !busy ? retryRef.current : undefined} onDismiss={() => { setError(null); retryRef.current = null }} /> : null}
 
       <div className="shrink-0 border-t border-[var(--color-border)] p-3">
         <textarea

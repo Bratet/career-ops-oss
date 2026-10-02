@@ -38,7 +38,7 @@ for (const turn of [0, 1]) {
 
 const analysis = editorAgentPrompt('Yes, I used MLflow.', 'tailored', 0, guidance, '.', true)
 check('analysis chat records durable confirmations in guidance', analysis.includes('record it in') && analysis.includes('candidate-guidance.md'))
-check('analysis chat does not re-ask settled guidance', analysis.includes('do not ask the user to confirm it again'))
+check('analysis chat does not re-ask settled guidance', analysis.includes('do not ask the candidate to confirm it again'))
 check('analysis chat still gates master edits', analysis.includes('Master resume updates still require an explicit request'))
 check('tailoring chat does not get the guidance-recording rule', !editorAgentPrompt('Shorten it.', 'tailored', 0, guidance).includes('Implicit practice is not a gap'))
 

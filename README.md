@@ -14,14 +14,15 @@ it is deployable to a serverless host.
 
 | Page | What it's for |
 |---|---|
-| `/` Dashboard | applications per week, status funnel, score distribution, response rate, week-over-week deltas |
+| `/` Dashboard | daily and weekly activity, status and score charts, response rate, and an optional application goal |
 | `/applications` | the tracker — sortable table over `workspace/state/applications.md`, with a 4-dot indicator for which documents each folder actually has |
 | `/applications/[key]` | canonical application workspace: overview and fit, persistent resume draft/preview, source files, runs, and assistant |
 | `/profile` | edit the English or French master resume — the source material for every tailored CV |
 | `/plan` | Apply plan — a board of saved job-search URLs to return to |
-| `/applications/[key]?tab=next` | Apply & follow up: update status and notes, or prepare a cover letter, email, or LinkedIn message one task at a time |
+| `/applications/[key]?tab=next` | Apply & follow up: update status and notes, draft and render a cover letter, or prepare an email or LinkedIn message |
+| `/settings` | theme, engine choices, and live model lists |
 | `/applications/[key]/editor` | compatibility redirect to the Resume tab in the canonical workspace |
-| Header **New application** | opens a posting dialog → engine analyzes it → creates a `Preparing` application and opens its workspace |
+| Header **New application** | analyzes a posting, checks for existing applications, then creates a `Preparing` workspace |
 
 ---
 
@@ -33,7 +34,7 @@ it is deployable to a serverless host.
   - `claude` — [Claude Code](https://claude.com/claude-code), `claude login`
   - `codex` — `codex login`
 
-Both CLIs authenticate through your **subscription**, not an API key. The app never
+The app's AI features use CLI sign-in through your **subscription**, not an API key. The app never
 reads `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`; if a CLI is logged out, the engine
 pill in the header says so instead of failing mid-request.
 
@@ -60,10 +61,10 @@ This is a personal-use tool: it's built around one candidate's identity and
 master resumes, not a multi-tenant product. To use it for yourself:
 
 1. `cp config/candidate.example.json config/candidate.json` and set `fullName`
-   to your own name. This drives every generated filename (`cv-<you>.yaml`,
-   `<You>.pdf`, ...). Optionally add `confidentialTerms` — names that should
+   to your own name. This drives generated filenames (`cv-<you>.yaml`,
+   `<Your_Name>_CV.pdf`, `<Your_Name>_cover_letter.pdf`). Optionally add `confidentialTerms` — names that should
    never appear on a generated resume or cover letter (e.g. a past employer's
-   confidential clients); `src/lib/validate.ts` blocks a render if any appear.
+   confidential clients); server-side resume and cover letter rendering blocks them.
 2. Add your own **master** resume(s) as
    `workspace/resumes/masters/master-resume-english.yaml` and/or `-french.yaml`
    — the complete, comprehensive evidence source (see `templates/tailored-design.yaml`
@@ -74,6 +75,8 @@ master resumes, not a multi-tenant product. To use it for yourself:
    imports stronger evidence from the master where it helps a specific posting.
 4. `workspace/state/applications.md` starts empty; `workspace/applications/`
    fills up as you create applications through the app.
+5. Optionally place a handwritten signature at `config/signature.png` for cover
+   letters. The file is local and gitignored. Without it, letters render unsigned.
 
 ## Make targets
 
@@ -85,12 +88,13 @@ master resumes, not a multi-tenant product. To use it for yourself:
 | `make build` / `make start` | production build and serve, still localhost-only |
 | `make stop` | free the port when a server is left running |
 | `make check` | typecheck |
-| `make test` | parse → serialize `workspace/state/applications.md` and assert it comes back **byte-identical**, plus the table invariants |
+| `make test` | tracker round-trip, application flows, tailoring, cover letters, goals, and extension tests |
 | `make reconcile` | rebuild `workspace/state/app-index.json` from folder names |
 | `make engines` | report whether `claude`, `codex`, and `rendercv` are available |
+| `make extension` | build the optional LinkedIn visa badge Chrome extension |
 | `make clean` / `make nuke` | drop `.next/` / also drop `node_modules/` |
 
-Every target takes `PORT=` (`make dev PORT=4000`). The npm scripts underneath are
+Server targets take `PORT=` (`make dev PORT=4000`). The npm scripts underneath are
 unchanged if you'd rather call them directly.
 
 Run `make test` before shipping anything that touches `src/lib/tracker.ts`. That
@@ -268,3 +272,23 @@ of the application workspace. Choose a status update or an optional message task
 drafts use the finalized resume and job posting and are saved after generation; manual
 edits show an unsaved indicator until saved. Existing next-steps links redirect to this
 workspace step. Messages are never sent by the app.
+
+The dashboard can track an optional daily, weekly, or monthly application goal.
+Application creation warns about matching jobs before writing a duplicate. The
+resume and cover letter editors show whether the saved PDF matches the current
+draft, and errors include a retry action when available.
+
+The cover letter editor uses the finalized resume for sender details, previews a
+one-page Typst PDF, and saves its inputs beside the PDF so edits can be checked
+against the finalized version. The `write-cover-letter` and `write-outreach`
+skills are editable on the Skills page. The included versions contain generic
+instructions; add your own voice and preferences to your local workspace.
+
+## Optional browser extension
+
+`make extension` builds `extension/visa-badge/` for loading as an unpacked Chrome
+extension. It labels LinkedIn postings for visa sponsorship and remote-location
+eligibility. The extension uses an OpenRouter key you enter in its local options;
+it sends the visible job text to OpenRouter for classification. This is separate
+from the app's Claude and Codex CLI sign-in. See the
+[extension README](extension/visa-badge/README.md) for setup and privacy details.

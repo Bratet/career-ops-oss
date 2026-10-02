@@ -4,7 +4,7 @@ import {
   allStatuses,
   isAiFeature,
   isEngineId,
-  modelFor,
+  resolvedModelFor,
   readSettings,
   writeFeatureSettings,
   type AiFeature,
@@ -22,7 +22,7 @@ async function state(settings: Settings, feature: AiFeature) {
   return {
     feature,
     engine: choice.engine,
-    model: modelFor(choice, choice.engine),
+    model: await resolvedModelFor(choice, choice.engine),
     models,
     statuses,
   }
@@ -45,7 +45,7 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: 'engine must be "claude" or "codex"' }, { status: 400 })
   }
   if (body.model !== undefined && (typeof body.model !== 'string' || (body.model !== '' && !MODEL_RE.test(body.model)))) {
-    return NextResponse.json({ error: 'model must be a model id, or "" for the CLI default' }, { status: 400 })
+    return NextResponse.json({ error: 'model must be a model id, or "" for the newest model' }, { status: 400 })
   }
 
   const settings = await writeFeatureSettings(body.feature, {

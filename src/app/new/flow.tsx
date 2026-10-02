@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { Card, CardHeader, Badge, Spinner } from '@/components/ui/primitives'
 import { readNdjson } from '@/lib/ndjson'
 import type { JdAnalysis } from '@/lib/tailoring/jd'
+import type { DuplicateMatch } from '@/lib/duplicates'
 import { cn } from '@/lib/utils'
 import type { SkillSummary } from '@/lib/skills/types'
 import { FeatureEnginePicker } from '@/components/FeatureEnginePicker'
@@ -27,6 +28,8 @@ export function NewApplicationFlow() {
   const [skills, setSkills] = useState<SkillSummary[]>([])
   const [skillId, setSkillId] = useState('analyze-job')
   const [runId, setRunId] = useState<string | null>(null)
+  const [duplicates, setDuplicates] = useState<DuplicateMatch[]>([])
+  const blocking = duplicates.filter((match) => match.reason !== 'same-company')
 
   useEffect(() => {
     fetch('/api/skills')
@@ -69,10 +72,27 @@ export function NewApplicationFlow() {
         if (e.type === 'done') { completed = e.analysis as JdAnalysis; setAnalysis(completed) }
       })
       if (!failed && !completed) throw new Error('Analysis ended without a result. Please retry.')
-      if (!failed && completed) setStep('review')
+      if (!failed && completed) {
+        setStep('review')
+        void checkDuplicates(completed)
+      }
     } catch (e) {
       setError((e as Error).message)
       setStep('paste')
+    }
+  }
+
+  async function checkDuplicates(result: JdAnalysis) {
+    setDuplicates([])
+    try {
+      const r = await fetch('/api/applications/duplicates', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ company: result.company, role: result.role, jd }),
+      })
+      if (r.ok) setDuplicates((await r.json()).matches as DuplicateMatch[])
+    } catch {
+      // The create route checks again, so a failed lookup only loses the early warning.
     }
   }
 
@@ -84,11 +104,20 @@ export function NewApplicationFlow() {
       const r = await fetch('/api/applications/create', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ analysis: result, jd, url, runId: analysisRun }),
+        body: JSON.stringify({ analysis: result, jd, url, runId: analysisRun, allowDuplicate: blocking.length > 0 }),
       })
       const d = await r.json()
+      if (r.status === 409 && Array.isArray(d.duplicates)) { setDuplicates(d.duplicates); setStep('review'); return }
       if (!r.ok) { setError(d.error ?? 'create failed'); setStep('review'); return }
       setCreatedKey(d.key)
+      // Run the fit analysis here so the overview opens with its results
+      // instead of a waiting placeholder. A failure still opens the page,
+      // which shows the error with a retry.
+      await fetch(`/api/applications/${encodeURIComponent(d.key)}/workspace/fit`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      }).catch(() => {})
       router.push(`/applications/${d.key}?tab=overview`)
     } catch (e) {
       setError((e as Error).message)
@@ -114,7 +143,7 @@ export function NewApplicationFlow() {
         <li className={`rounded-lg px-2 py-2 sm:rounded-full sm:px-3 sm:py-1.5 ${step === 'creating' ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]' : 'bg-[var(--color-surface-2)]'}`}>3. Create workspace</li>
       </ol> : null}
 
-      {step === 'creating' ? <p role="status" className="text-sm text-[var(--color-muted)]">{progress.at(-1) ?? 'Opening your analysis…'}</p> : null}
+      {step === 'creating' ? <p role="status" className="flex items-center gap-2 text-sm text-[var(--color-muted)]"><Spinner />{createdKey ? 'Comparing the job requirements with your master resume… This can take a minute.' : 'Creating the application…'}</p> : null}
       {createdKey && error ? <Link href={`/applications/${createdKey}?tab=overview`} className="text-sm text-[var(--color-accent)] underline">Open the analysis workspace</Link> : null}
       {error ? (
         <Card className="border-[var(--color-bad-soft)]">
@@ -204,6 +233,7 @@ export function NewApplicationFlow() {
               <Link href={`/runs/${runId}`} className="text-xs text-[var(--color-accent)] hover:underline">Inspect analysis run →</Link>
             </div>
           ) : null}
+          {duplicates.length ? <DuplicateWarning matches={duplicates} /> : null}
           <Card>
             <CardHeader
               title="What the engine read"
@@ -270,7 +300,7 @@ export function NewApplicationFlow() {
               <div className="flex-1">
                 <p className="text-[13px]">Create the application folder</p>
                 <p className="mt-0.5 text-xs text-[var(--color-faint)]">
-                  Writes <code>jd.md</code>, a tailored resume YAML seeded from your{' '}
+                  Writes <code>jd.md</code>, a resume YAML seeded from your{' '}
                   {analysis.language === 'fr' ? 'FR' : 'EN'} master, and <code>tailoring-notes.md</code> with the
                   requirement map. Review the analysis and clarify questions with the AI before requesting tailoring.
                 </p>
@@ -281,13 +311,44 @@ export function NewApplicationFlow() {
                   'flex items-center gap-2 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-[13px] font-medium text-[var(--color-bg)] hover:opacity-90',
                 )}
               >
-                {error ? 'Retry creating application' : 'Create application'}
+                {blocking.length ? 'Create anyway' : error ? 'Retry creating application' : 'Create application'}
               </button>
             </div>
           </Card>
         </>
       ) : null}
     </div>
+  )
+}
+
+const REASONS: Record<DuplicateMatch['reason'], string> = {
+  'same-posting': 'Same posting',
+  'same-role': 'Same company and role',
+  'same-company': 'Same company',
+}
+
+function DuplicateWarning({ matches }: { matches: DuplicateMatch[] }) {
+  const blocking = matches.some((match) => match.reason !== 'same-company')
+  const applied = matches.some((match) => match.applied && match.reason !== 'same-company')
+  return (
+    <Card className={blocking ? 'border-[var(--color-warn)]' : undefined}>
+      <CardHeader
+        title={applied ? 'You already applied to this job' : blocking ? 'You already have an application for this job' : 'You have other applications at this company'}
+        hint={blocking ? 'Open the existing application instead, or create a new one anyway if this is a different opening.' : 'Check these are different roles before creating a new application.'}
+      />
+      <ul className="divide-y divide-[var(--color-border)]">
+        {matches.map((match) => (
+          <li key={match.key} className="flex flex-wrap items-center gap-3 px-5 py-3">
+            <Badge tone={match.reason === 'same-company' ? 'neutral' : 'warn'}>{REASONS[match.reason]}</Badge>
+            <span className="min-w-0 flex-1 text-[13px]">
+              <span className="block">{match.company} · {match.role || 'Role not recorded'}</span>
+              <span className="mt-0.5 block text-[11px] text-[var(--color-faint)]">{match.date || 'No date'} · {match.status || 'No status'}</span>
+            </span>
+            <Link href={`/applications/${encodeURIComponent(match.key)}`} className="text-xs text-[var(--color-accent)] hover:underline">Open</Link>
+          </li>
+        ))}
+      </ul>
+    </Card>
   )
 }
 

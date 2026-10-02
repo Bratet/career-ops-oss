@@ -27,6 +27,9 @@ next-env.d.ts
 
 # Local app state (machine-specific, not shared)
 workspace/state/settings.json
+workspace/state/claude-models.json
+workspace/state/codex-models.json
+workspace/state/goal.json
 workspace/state/.trash/
 
 # Scratch render previews (not application output)

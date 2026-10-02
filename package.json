@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:weeks": "tsx scripts/test-weeks.ts",
     "test:saved-searches": "tsx scripts/test-saved-searches.ts",
     "test:resume-review": "tsx scripts/test-resume-review.ts",
     "test:general-application": "tsx scripts/test-general-application.ts",
@@ -23,7 +22,15 @@
     "test:application-delete": "tsx scripts/test-application-delete.ts",
     "test:workspaces": "tsx scripts/test-workspaces.ts",
     "test:application-flow": "tsx scripts/test-application-flow.ts",
-    "test:outreach": "tsx scripts/test-outreach.ts"
+    "test:outreach": "tsx scripts/test-outreach.ts",
+    "test:activity": "tsx scripts/test-activity.ts",
+    "test:goal": "tsx scripts/test-goal.ts",
+    "test:model-catalogs": "tsx scripts/test-model-catalogs.ts",
+    "test:cover-letter": "tsx scripts/test-cover-letter.ts",
+    "test:duplicates": "tsx scripts/test-duplicates.ts",
+    "test:friendly-error": "tsx scripts/test-friendly-error.ts",
+    "test:posting-contact": "tsx scripts/test-posting-contact.ts",
+    "test:visa-badge": "tsx scripts/test-visa-badge.ts"
   },
   "dependencies": {
     "@codemirror/lang-yaml": "^6.1.2",

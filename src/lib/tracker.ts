@@ -35,6 +35,8 @@ interface ParsedTracker {
   rawRows: string[]
   /** Trailing newline presence, so serialize round-trips exactly. */
   trailingNewline: boolean
+  /** Git may check the file out with CRLF on Windows; new rows must match it. */
+  lineEnding: '\n' | '\r\n'
 }
 
 const HEADER_RE = /^\|\s*#\s*\|/
@@ -45,8 +47,9 @@ function splitRow(line: string): string[] {
 }
 
 export function parseTracker(text: string): ParsedTracker {
-  const trailingNewline = text.endsWith('\n')
-  const lines = text.split('\n')
+  const lineEnding = text.includes('\r\n') ? '\r\n' : '\n'
+  const trailingNewline = text.endsWith(lineEnding)
+  const lines = text.split(lineEnding)
   if (trailingNewline) lines.pop()
 
   const headerIdx = lines.findIndex((l) => HEADER_RE.test(l))
@@ -78,13 +81,13 @@ export function parseTracker(text: string): ParsedTracker {
     rawRows.push(line)
   }
 
-  return { preamble, header, separator, rows, rawRows, trailingNewline }
+  return { preamble, header, separator, rows, rawRows, trailingNewline, lineEnding }
 }
 
 export function serializeTracker(t: ParsedTracker): string {
   const body = t.rows.map((r, index) => t.rawRows[index] ?? rowLine(r))
   const lines = [...t.preamble, t.header, t.separator, ...body]
-  return lines.join('\n') + (t.trailingNewline ? '\n' : '')
+  return lines.join(t.lineEnding) + (t.trailingNewline ? t.lineEnding : '')
 }
 
 export async function readTracker(path = PATHS.tracker): Promise<ParsedTracker> {

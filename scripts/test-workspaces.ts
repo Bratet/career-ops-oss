@@ -7,7 +7,7 @@ const originalCwd = process.cwd()
 const root = await mkdtemp(join(tmpdir(), 'career-ops-workspace-'))
 try {
   process.chdir(root)
-  const { APP_FILES, PATHS } = await import('../src/lib/paths')
+  const { PATHS, APP_FILES } = await import('../src/lib/paths')
   const key = 'acme-2026-09-03'
   await Promise.all([
     mkdir(PATHS.state, { recursive: true }),
